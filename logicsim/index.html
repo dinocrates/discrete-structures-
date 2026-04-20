@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Logic Gate Simulator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #f4f6f4;
+      --surface:   #ffffff;
+      --border:    #d4ddd6;
+      --border-md: #b0c4b8;
+      --accent:    #16a34a;
+      --accent-dim:#15803d;
+      --accent-lo: #dcfce7;
+      --text:      #1e293b;
+      --text-dim:  #475569;
+      --text-mute: #94a3b8;
+      --danger:    #dc2626;
+      --danger-bg: #fee2e2;
+    }
+
+    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: 'Share Tech Mono', monospace; overflow: hidden; }
+
+    #app { display: flex; flex-direction: column; height: 100vh; }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 0 16px; height: 50px; display: flex; align-items: center;
+      gap: 12px; flex-shrink: 0; user-select: none;
+    }
+    .brand { font-family: 'Orbitron', monospace; font-size: 12px; font-weight: 700; letter-spacing: 5px; color: var(--accent); white-space: nowrap; }
+    .brand span { font-weight: 500; color: var(--text-mute); }
+    .divider { width: 1px; height: 24px; background: var(--border); flex-shrink: 0; }
+    .toolbar { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+    .g-btn {
+      background: transparent; border: 1px solid var(--border); color: var(--text-dim);
+      padding: 4px 9px; font-family: 'Share Tech Mono', monospace; font-size: 11px;
+      letter-spacing: 1px; cursor: pointer; border-radius: 3px;
+      transition: border-color .12s, color .12s, background .12s;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .g-btn:hover { border-color: var(--accent-dim); color: var(--accent); background: var(--accent-lo); }
+    .g-btn svg { flex-shrink: 0; display: block; overflow: visible; }
+    .g-btn svg .gs { stroke: #b0c4b8; fill: #f8faf8; transition: stroke .12s, fill .12s; }
+    .g-btn:hover svg .gs { stroke: var(--accent-dim); fill: var(--accent-lo); }
+    .g-btn.tt-btn { color: #0369a1; border-color: #bae6fd; }
+    .g-btn.tt-btn:hover { background: #e0f2fe; border-color: #0369a1; color: #0369a1; }
+    .g-btn.danger { color: #7f3333; border-color: #e5b4b4; }
+    .g-btn.danger:hover { color: var(--danger); border-color: var(--danger); background: var(--danger-bg); }
+    .ml-auto { margin-left: auto; }
+
+    /* ── Main ── */
+    main { flex: 1; display: flex; overflow: hidden; }
+
+    /* ── Canvas ── */
+    #cv { flex: 1; position: relative; overflow: hidden; cursor: default; }
+    #cv::before {
+      content: ''; position: absolute; inset: 0;
+      background-image: radial-gradient(circle, #c8d4cc 1px, transparent 1px);
+      background-size: 22px 22px; pointer-events: none; z-index: 0;
+    }
+    .gate-el { position: absolute; z-index: 10; cursor: grab; transition: filter .1s; }
+    .gate-el:hover { filter: drop-shadow(0 0 5px rgba(22,163,74,.3)); }
+    .gate-el.dragging { cursor: grabbing; z-index: 50; filter: drop-shadow(0 0 9px rgba(22,163,74,.45)); }
+    .gate-el.input-gate { cursor: pointer; }
+    .gate-el.selected .del-btn { opacity: 1 !important; pointer-events: auto !important; }
+
+    /* Hover delete button on each gate */
+    .del-btn {
+      position: absolute; top: -8px; right: -8px;
+      width: 18px; height: 18px; border-radius: 50%;
+      background: #fee2e2; border: 1px solid #fca5a5;
+      color: #dc2626; font-size: 10px; line-height: 1;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; opacity: 0; pointer-events: none;
+      transition: opacity .12s, background .1s;
+      z-index: 30; user-select: none;
+    }
+    .gate-el:hover .del-btn { opacity: 1; pointer-events: auto; }
+    .del-btn:hover { background: #fca5a5; }
+
+    /* Inline rename input floats above canvas */
+    #rename-inp {
+      display: none; position: absolute; z-index: 200;
+      width: 58px; padding: 2px 6px;
+      font-family: 'Share Tech Mono', monospace; font-size: 11px;
+      letter-spacing: 1px; text-align: center;
+      border: 1.5px solid var(--accent); border-radius: 4px;
+      background: white; color: var(--text); outline: none;
+      box-shadow: 0 2px 8px rgba(0,0,0,.12);
+    }
+
+    /* ── Sidebar ── */
+    #sidebar { width: 192px; flex-shrink: 0; background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+    .side-section { padding: 13px 15px; border-bottom: 1px solid var(--border); }
+    .side-title { font-family: 'Orbitron', monospace; font-size: 9px; font-weight: 700; letter-spacing: 3px; color: var(--accent-dim); margin-bottom: 9px; }
+    .hint { font-size: 11px; color: var(--text-dim); line-height: 1.85; }
+    .hint b { color: var(--text); font-weight: normal; }
+    .ref-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+    .ref-table th { color: var(--text-mute); font-weight: normal; text-align: left; padding: 3px 0; border-bottom: 1px solid var(--border); }
+    .ref-table td { padding: 3px 4px 3px 0; color: var(--text-dim); vertical-align: top; }
+    .ref-table td:first-child { color: var(--accent-dim); }
+    .sig-row { display: flex; align-items: center; gap: 8px; font-size: 10px; color: var(--text-dim); margin-bottom: 5px; }
+    .sig-line { width: 22px; height: 2px; border-radius: 1px; }
+
+    /* ── Status bar ── */
+    #statusbar { background: var(--surface); border-top: 1px solid var(--border); padding: 5px 14px; font-size: 10px; color: var(--text-dim); flex-shrink: 0; min-height: 28px; display: flex; align-items: center; gap: 16px; }
+    #status-msg { flex: 1; }
+    .stat-pill { color: var(--text-mute); font-size: 10px; }
+    .stat-pill span { color: var(--text-dim); }
+    body.connecting { cursor: crosshair; }
+    body.connecting .gate-el { cursor: crosshair; }
+
+    /* ── Truth Table Modal ── */
+    #tt-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(15,23,42,.25); z-index: 500;
+      align-items: center; justify-content: center;
+    }
+    #tt-overlay.open { display: flex; }
+    #tt-modal {
+      background: white; border-radius: 12px; border: 1px solid var(--border);
+      min-width: 340px; max-width: 88vw; max-height: 80vh;
+      display: flex; flex-direction: column; overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0,0,0,.12);
+    }
+    .tt-head { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+    .tt-head-title { font-family: 'Orbitron', monospace; font-size: 11px; font-weight: 700; letter-spacing: 3px; color: var(--accent-dim); flex: 1; }
+    .tt-head-sub { font-size: 11px; color: var(--text-mute); }
+    .tt-close { background: none; border: 1px solid var(--border); border-radius: 4px; width: 26px; height: 26px; cursor: pointer; color: var(--text-dim); font-size: 13px; display: flex; align-items: center; justify-content: center; }
+    .tt-close:hover { background: var(--danger-bg); border-color: var(--danger); color: var(--danger); }
+    .tt-body { overflow-y: auto; padding: 16px; }
+    #tt-table { border-collapse: collapse; font-family: 'Share Tech Mono', monospace; font-size: 12px; width: 100%; }
+    #tt-table th { padding: 7px 16px; font-weight: normal; font-size: 11px; letter-spacing: 1px; border: 1px solid var(--border); white-space: nowrap; }
+    #tt-table th.col-in  { background: #f0fdf4; color: #15803d; }
+    #tt-table th.col-out { background: #faf5ff; color: #7c3aed; }
+    #tt-table td { padding: 6px 16px; border: 1px solid var(--border); text-align: center; }
+    #tt-table tr:nth-child(even) td { background: #fafafa; }
+    .tt-hi { display: inline-block; background: #dcfce7; color: #15803d; border-radius: 3px; padding: 1px 9px; font-weight: 500; }
+    .tt-lo { display: inline-block; background: #f1f5f9; color: #64748b; border-radius: 3px; padding: 1px 9px; }
+    .tt-x  { display: inline-block; background: #fef9c3; color: #a16207; border-radius: 3px; padding: 1px 9px; }
+    .tt-note { font-size: 11px; color: var(--text-mute); margin-top: 12px; text-align: center; }
+    .tt-exports { display: flex; gap: 6px; }
+    .tt-exp-btn {
+      background: transparent; border: 1px solid var(--border); border-radius: 4px;
+      padding: 3px 10px; font-family: 'Share Tech Mono', monospace; font-size: 10px;
+      letter-spacing: 1px; cursor: pointer; color: var(--text-dim);
+      display: inline-flex; align-items: center; gap: 5px;
+      transition: border-color .12s, color .12s, background .12s;
+    }
+    .tt-exp-btn:hover      { border-color: var(--accent-dim); color: var(--accent); background: var(--accent-lo); }
+    .tt-exp-btn.csv:hover  { border-color: #0369a1; color: #0369a1; background: #e0f2fe; }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <header>
+    <div class="brand">LOGIC<span>SIM</span></div>
+    <div class="divider"></div>
+    <div class="toolbar">
+      <!-- INPUT -->
+      <button class="g-btn" onclick="G.spawn('INPUT')">
+        <svg width="22" height="14" viewBox="0 0 22 14">
+          <rect class="gs" x="1" y="1" width="14" height="12" rx="3" stroke-width="1.2"/>
+          <line x1="15" y1="7" x2="21" y2="7" stroke="#b0c4b8" stroke-width="1.2"/>
+        </svg>INPUT
+      </button>
+      <!-- OUTPUT -->
+      <button class="g-btn" onclick="G.spawn('OUTPUT')">
+        <svg width="18" height="14" viewBox="0 0 18 14">
+          <line x1="1" y1="7" x2="5" y2="7" stroke="#b0c4b8" stroke-width="1.2"/>
+          <circle class="gs" cx="11" cy="7" r="6" stroke-width="1.2"/>
+        </svg>OUTPUT
+      </button>
+      <!-- NOT -->
+      <button class="g-btn" onclick="G.spawn('NOT')">
+        <svg width="22" height="14" viewBox="0 0 22 14">
+          <line x1="0" y1="7" x2="3" y2="7" stroke="#b0c4b8" stroke-width="1.2"/>
+          <polygon class="gs" points="3,1 3,13 15,7" stroke-width="1.2" stroke-linejoin="round"/>
+          <circle class="gs" cx="18" cy="7" r="2.5" stroke-width="1.2"/>
+          <line x1="20.5" y1="7" x2="22" y2="7" stroke="#b0c4b8" stroke-width="1.2"/>
+        </svg>NOT
+      </button>
+      <!-- AND -->
+      <button class="g-btn" onclick="G.spawn('AND')">
+        <svg width="26" height="14" viewBox="0 0 26 14">
+          <line x1="0" y1="4" x2="4" y2="4" stroke="#b0c4b8" stroke-width="1.2"/>
+          <line x1="0" y1="10" x2="4" y2="10" stroke="#b0c4b8" stroke-width="1.2"/>
+          <path class="gs" d="M 4,1 H 14 A 6,6 0 0,1 14,13 H 4 Z" stroke-width="1.2"/>
+          <line x1="20" y1="7" x2="26" y2="7" stroke="#b0c4b8" stroke-width="1.2"/>
+        </svg>AND
+      </button>
+      <!-- OR -->
+      <button class="g-btn" onclick="G.spawn('OR')">
+        <svg width="26" height="14" viewBox="0 0 26 14">
+          <line x1="0" y1="4" x2="5" y2="4" stroke="#b0c4b8" stroke-width="1.2"/>
+          <line x1="0" y1="10" x2="5" y2="10" stroke="#b0c4b8" stroke-width="1.2"/>
+          <path class="gs" d="M 3,1 Q 8,7 3,13 Q 10,13 16,13 Q 22,13 22,7 Q 22,1 16,1 Q 10,1 3,1 Z" stroke-width="1.2"/>
+          <line x1="22" y1="7" x2="26" y2="7" stroke="#b0c4b8" stroke-width="1.2"/>
+        </svg>OR
+      </button>
+      <!-- NAND -->
+      <button class="g-btn" onclick="G.spawn('NAND')">
+        <svg width="28" height="14" viewBox="0 0 28 14">
+          <line x1="0" y1="4" x2="4" y2="4" stroke="#b0c4b8" stroke-width="1.2"/>
+          <line x1="0" y1="10" x2="4" y2="10" stroke="#b0c4b8" stroke-width="1.2"/>
+          <path class="gs" d="M 4,1 H 14 A 6,6 0 0,1 14,13 H 4 Z" stroke-width="1.2"/>
+          <circle class="gs" cx="23" cy="7" r="2.5" stroke-width="1.2"/>
+          <line x1="25.5" y1="7" x2="28" y2="7" stroke="#b0c4b8" stroke-width="1.2"/>
+        </svg>NAND
+      </button>
+      <!-- NOR -->
+      <button class="g-btn" onclick="G.spawn('NOR')">
+        <svg width="28" height="14" viewBox="0 0 28 14">
+          <line x1="0" y1="4" x2="5" y2="4" stroke="#b0c4b8" stroke-width="1.2"/>
+          <line x1="0" y1="10" x2="5" y2="10" stroke="#b0c4b8" stroke-width="1.2"/>
+          <path class="gs" d="M 3,1 Q 8,7 3,13 Q 10,13 16,13 Q 21,13 21,7 Q 21,1 16,1 Q 10,1 3,1 Z" stroke-width="1.2"/>
+          <circle class="gs" cx="23.5" cy="7" r="2.5" stroke-width="1.2"/>
+          <line x1="26" y1="7" x2="28" y2="7" stroke="#b0c4b8" stroke-width="1.2"/>
+        </svg>NOR
+      </button>
+      <!-- XOR -->
+      <button class="g-btn" onclick="G.spawn('XOR')">
+        <svg width="28" height="14" viewBox="0 0 28 14">
+          <line x1="0" y1="4" x2="6" y2="4" stroke="#b0c4b8" stroke-width="1.2"/>
+          <line x1="0" y1="10" x2="6" y2="10" stroke="#b0c4b8" stroke-width="1.2"/>
+          <path d="M 2,1 Q 7,7 2,13" fill="none" stroke="#b0c4b8" stroke-width="1.2"/>
+          <path class="gs" d="M 5,1 Q 10,7 5,13 Q 12,13 18,13 Q 24,13 24,7 Q 24,1 18,1 Q 12,1 5,1 Z" stroke-width="1.2"/>
+          <line x1="24" y1="7" x2="28" y2="7" stroke="#b0c4b8" stroke-width="1.2"/>
+        </svg>XOR
+      </button>
+      <!-- XNOR -->
+      <button class="g-btn" onclick="G.spawn('XNOR')">
+        <svg width="30" height="14" viewBox="0 0 30 14">
+          <line x1="0" y1="4" x2="6" y2="4" stroke="#b0c4b8" stroke-width="1.2"/>
+          <line x1="0" y1="10" x2="6" y2="10" stroke="#b0c4b8" stroke-width="1.2"/>
+          <path d="M 2,1 Q 7,7 2,13" fill="none" stroke="#b0c4b8" stroke-width="1.2"/>
+          <path class="gs" d="M 5,1 Q 10,7 5,13 Q 12,13 18,13 Q 23,13 23,7 Q 23,1 18,1 Q 12,1 5,1 Z" stroke-width="1.2"/>
+          <circle class="gs" cx="25.5" cy="7" r="2.5" stroke-width="1.2"/>
+          <line x1="28" y1="7" x2="30" y2="7" stroke="#b0c4b8" stroke-width="1.2"/>
+        </svg>XNOR
+      </button>
+    </div>
+    <div class="ml-auto" style="display:flex;gap:6px;align-items:center;">
+      <button class="g-btn tt-btn" onclick="G.openTT()">⊞ Truth Table</button>
+      <div class="divider"></div>
+      <button class="g-btn danger" onclick="G.clearAll()">✕ Clear</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="cv">
+      <svg id="w-svg" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none;"></svg>
+      <svg id="t-svg" style="position:absolute;inset:0;width:100%;height:100%;z-index:5;pointer-events:none;"></svg>
+      <input id="rename-inp" type="text" maxlength="8" spellcheck="false" />
+    </div>
+
+    <div id="sidebar">
+      <div class="side-section">
+        <div class="side-title">CONTROLS</div>
+        <div class="hint">
+          <b>Click toolbar</b> to add a gate<br>
+          <b>Drag</b> to reposition<br>
+          <b>Output → Input</b> to wire<br>
+          <b>Click INPUT</b> to toggle 0/1<br>
+          <b>Double-click</b> I/O to rename<br>
+          <b>Hover ✕</b> to delete gate/wire<br>
+          <b>Click + Del/⌫</b> to delete gate<br>
+          <b>Esc</b> to cancel
+        </div>
+      </div>
+      <div class="side-section" style="flex:1;overflow-y:auto;">
+        <div class="side-title">GATE REFERENCE</div>
+        <table class="ref-table">
+          <tr><th>Gate</th><th>Function</th></tr>
+          <tr><td>NOT</td><td>Inverts input</td></tr>
+          <tr><td>AND</td><td>1 if all inputs 1</td></tr>
+          <tr><td>OR</td><td>1 if any input 1</td></tr>
+          <tr><td>NAND</td><td>NOT AND</td></tr>
+          <tr><td>NOR</td><td>NOT OR</td></tr>
+          <tr><td>XOR</td><td>1 if inputs differ</td></tr>
+          <tr><td>XNOR</td><td>1 if inputs match</td></tr>
+        </table>
+      </div>
+      <div class="side-section">
+        <div class="side-title">SIGNAL</div>
+        <div class="sig-row"><div class="sig-line" style="background:#16a34a"></div><span>HIGH (1)</span></div>
+        <div class="sig-row"><div class="sig-line" style="background:#94a3b8"></div><span>LOW (0)</span></div>
+        <div class="sig-row"><div class="sig-line" style="background:#cbd5e1;border:1px dashed #94a3b8;height:0;border-width:1px 0"></div><span>Undefined</span></div>
+      </div>
+    </div>
+  </main>
+
+  <div id="statusbar">
+    <span id="status-msg">Click a gate type in the toolbar to begin.</span>
+    <span class="stat-pill">Gates: <span id="s-gates">0</span></span>
+    <span class="stat-pill">Wires: <span id="s-wires">0</span></span>
+  </div>
+</div>
+
+<!-- Truth Table Modal -->
+<div id="tt-overlay" onclick="G.closeTT()">
+  <div id="tt-modal" onclick="event.stopPropagation()">
+    <div class="tt-head">
+      <span class="tt-head-title">TRUTH TABLE</span>
+      <span class="tt-head-sub" id="tt-sub"></span>
+      <div class="tt-exports">
+        <button class="tt-exp-btn csv" onclick="G.exportCSV()">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1" y="1" width="10" height="10" rx="1.5"/><line x1="1" y1="4" x2="11" y2="4"/><line x1="4" y1="4" x2="4" y2="11"/></svg>CSV
+        </button>
+        <button class="tt-exp-btn" onclick="G.exportPNG()">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1" y="1" width="10" height="10" rx="1.5"/><polyline points="1,8 3.5,5 5.5,7 8,4 11,8"/><circle cx="8.5" cy="3" r="1" fill="currentColor" stroke="none"/></svg>PNG
+        </button>
+      </div>
+      <button class="tt-close" onclick="G.closeTT()">✕</button>
+    </div>
+    <div class="tt-body">
+      <table id="tt-table"></table>
+      <p class="tt-note" id="tt-note"></p>
+    </div>
+  </div>
+</div>
+
+<script>
+const G = (function () {
+  'use strict';
+
+  const HI = '#16a34a', LO = '#94a3b8', XC = '#cbd5e1';
+  const GS = '#7aa88a', GF = '#ffffff';
+
+  const SP = {
+    INPUT:  { vw:64, vh:36, ins:[], outs:[{x:64,y:18}], bodyOut:{x:52,y:18} },
+    OUTPUT: { vw:54, vh:50, ins:[{x:0,y:25}], outs:[], bodyIn:[{x:13,y:25}] },
+    NOT:    { vw:72, vh:40, ins:[{x:0,y:20}], outs:[{x:72,y:20}], bodyOut:{x:65,y:20}, bodyIn:[{x:10,y:20}] },
+    AND:    { vw:80, vh:50, ins:[{x:0,y:15},{x:0,y:35}], outs:[{x:80,y:25}], bodyOut:{x:60,y:25}, bodyIn:[{x:10,y:15},{x:10,y:35}] },
+    OR:     { vw:80, vh:50, ins:[{x:0,y:15},{x:0,y:35}], outs:[{x:80,y:25}], bodyOut:{x:76,y:25}, bodyIn:[{x:10,y:15},{x:10,y:35}] },
+    NAND:   { vw:80, vh:50, ins:[{x:0,y:15},{x:0,y:35}], outs:[{x:80,y:25}], bodyOut:{x:63,y:25}, bodyIn:[{x:10,y:15},{x:10,y:35}] },
+    NOR:    { vw:80, vh:50, ins:[{x:0,y:15},{x:0,y:35}], outs:[{x:80,y:25}], bodyOut:{x:77,y:25}, bodyIn:[{x:10,y:15},{x:10,y:35}] },
+    XOR:    { vw:80, vh:50, ins:[{x:0,y:15},{x:0,y:35}], outs:[{x:80,y:25}], bodyOut:{x:76,y:25}, bodyIn:[{x:10,y:15},{x:10,y:35}] },
+    XNOR:   { vw:80, vh:50, ins:[{x:0,y:15},{x:0,y:35}], outs:[{x:80,y:25}], bodyOut:{x:77,y:25}, bodyIn:[{x:10,y:15},{x:10,y:35}] },
+  };
+
+  let gates = [], wires = [], uid = 1;
+  let drag = null, conn = null;
+
+  const cv     = document.getElementById('cv');
+  const wsvg   = document.getElementById('w-svg');
+  const tsvg   = document.getElementById('t-svg');
+  const stMsg  = document.getElementById('status-msg');
+  const sGates = document.getElementById('s-gates');
+  const sWires = document.getElementById('s-wires');
+  const renInp = document.getElementById('rename-inp');
+
+  /* ── Auto-naming ──────────────────────────────────── */
+  function nextName(type) {
+    const used = gates.filter(g => g.type===type).map(g => g.name);
+    const pool = type==='INPUT'
+      ? ['A','B','C','D','E','F','G','H','I','J','K','L']
+      : ['Y','Z','W','V','Q','P','R','S'];
+    for (const n of pool) if (!used.includes(n)) return n;
+    return type==='INPUT' ? `I${gates.filter(g=>g.type==='INPUT').length}` : `O${gates.filter(g=>g.type==='OUTPUT').length}`;
+  }
+
+  /* ── Evaluate ─────────────────────────────────────── */
+  function evalGate(type, ins, val) {
+    const x=null, [a,b]=ins;
+    switch(type) {
+      case 'INPUT':  return val;
+      case 'OUTPUT': return null;
+      case 'NOT':    return a===x?x:a^1;
+      case 'AND':    return (a===x||b===x)?x:a&b;
+      case 'OR':     return (a===x||b===x)?x:a|b;
+      case 'NAND':   return (a===x||b===x)?x:(a&b)^1;
+      case 'NOR':    return (a===x||b===x)?x:(a|b)^1;
+      case 'XOR':    return (a===x||b===x)?x:a^b;
+      case 'XNOR':   return (a===x||b===x)?x:(a^b)^1;
+      default: return null;
+    }
+  }
+
+  /* ── Core simulation (no render) ─────────────────── */
+  function simulateCore() {
+    for (const g of gates) g._o = g.type==='INPUT' ? g.val : null;
+    for (let i=0; i<64; i++) {
+      let changed=false;
+      for (const g of gates) {
+        if (g.type==='INPUT') continue;
+        const ins = SP[g.type].ins.map((_,idx) => {
+          const w=wires.find(w=>w.tId===g.id&&w.tP===idx);
+          if (!w) return null;
+          const src=gates.find(gg=>gg.id===w.fId);
+          return src?src._o:null;
+        });
+        const no=evalGate(g.type,ins,g.val);
+        if (no!==g._o) { g._o=no; changed=true; }
+      }
+      if (!changed) break;
+    }
+    for (const w of wires) { const src=gates.find(g=>g.id===w.fId); w.sig=src?src._o:null; }
+  }
+
+  function simulate() { simulateCore(); renderAll(); updateStats(); }
+
+  /* ── Port → world ─────────────────────────────────── */
+  function portW(g, isOut, idx) {
+    const p=isOut?SP[g.type].outs[idx||0]:SP[g.type].ins[idx];
+    return { x:g.x+p.x, y:g.y+p.y };
+  }
+
+  /* ── SVG helpers ──────────────────────────────────── */
+  function E(tag,attrs) {
+    const el=document.createElementNS('http://www.w3.org/2000/svg',tag);
+    for (const[k,v] of Object.entries(attrs)) k==='style'?(el.style.cssText=v):el.setAttribute(k,v);
+    return el;
+  }
+  function T(text,attrs) { const el=E('text',attrs); el.textContent=text; return el; }
+
+  /* ── Draw gate SVG ────────────────────────────────── */
+  function drawGate(svg, gate) {
+    const sp=SP[gate.type], sig=gate._o;
+    const sc=sig===1?HI:sig===0?LO:XC;
+    const mono="font-family:'Share Tech Mono',monospace";
+    const {vw:W,vh:H}=sp;
+    const label = gate.name || (gate.type==='INPUT'?'IN':gate.type==='OUTPUT'?'OUT':'');
+
+    // Input stubs
+    sp.ins.forEach((p,i) => {
+      const w=wires.find(w=>w.tId===gate.id&&w.tP===i);
+      const c=w?(w.sig===1?HI:w.sig===0?LO:XC):'#d1d5db';
+      const bi=(sp.bodyIn&&sp.bodyIn[i])||{x:10,y:p.y};
+      svg.appendChild(E('line',{x1:p.x,y1:p.y,x2:bi.x,y2:bi.y,style:`stroke:${c};stroke-width:1.5`}));
+    });
+    // Output stub
+    if (sp.outs.length&&sp.bodyOut) {
+      const{x:bx,y:by}=sp.bodyOut,po=sp.outs[0];
+      svg.appendChild(E('line',{x1:bx,y1:by,x2:po.x,y2:po.y,style:`stroke:${sc};stroke-width:1.5`}));
+    }
+
+    switch(gate.type) {
+      case 'INPUT': {
+        const v=gate.val,bg=v?'#dcfce7':GF,fc=v?HI:'#94a3b8',bc=v?HI:GS;
+        svg.appendChild(E('rect',{x:2,y:2,width:W-14,height:H-4,rx:5,style:`fill:${bg};stroke:${bc};stroke-width:1.5`}));
+        svg.appendChild(T(v?'1':'0',{x:(W-12)/2+2,y:H/2+5,'text-anchor':'middle',style:`fill:${fc};${mono};font-size:16px;font-weight:500`}));
+        svg.appendChild(T(label,{x:(W-12)/2+2,y:H-4,'text-anchor':'middle',style:`fill:${v?'#86efac':'#b0c4b8'};${mono};font-size:8px;letter-spacing:1px`}));
+        break;
+      }
+      case 'OUTPUT': {
+        const inW=wires.find(w=>w.tId===gate.id),s=inW?inW.sig:null;
+        const c=s===1?HI:s===0?LO:XC,bg=s===1?'#dcfce7':GF;
+        svg.appendChild(E('circle',{cx:W/2+4,cy:H/2-4,r:H/2-8,style:`fill:${bg};stroke:${c};stroke-width:1.5`}));
+        svg.appendChild(T(s===1?'1':s===0?'0':'?',{x:W/2+4,y:H/2,'text-anchor':'middle',style:`fill:${s===1?HI:'#94a3b8'};${mono};font-size:13px;font-weight:500`}));
+        svg.appendChild(T(label,{x:W/2+4,y:H-3,'text-anchor':'middle',style:`fill:#b0c4b8;${mono};font-size:8px;letter-spacing:1px`}));
+        break;
+      }
+      case 'NOT':
+        svg.appendChild(E('polygon',{points:`10,2 10,${H-2} 55,${H/2}`,style:`fill:${GF};stroke:${GS};stroke-width:1.5;stroke-linejoin:round`}));
+        svg.appendChild(E('circle',{cx:60,cy:H/2,r:5,style:`fill:${GF};stroke:${GS};stroke-width:1.5`}));
+        svg.appendChild(T('NOT',{x:30,y:H/2+4,'text-anchor':'middle',style:`fill:#7aa88a;${mono};font-size:9px`}));
+        break;
+      case 'AND': case 'NAND':
+        svg.appendChild(E('path',{d:`M 10,3 H 38 A 22,22 0 0,1 38,47 H 10 Z`,style:`fill:${GF};stroke:${GS};stroke-width:1.5`}));
+        if(gate.type==='NAND') svg.appendChild(E('circle',{cx:58,cy:25,r:5,style:`fill:${GF};stroke:${GS};stroke-width:1.5`}));
+        svg.appendChild(T(gate.type,{x:29,y:29,'text-anchor':'middle',style:`fill:#7aa88a;${mono};font-size:9px`}));
+        break;
+      case 'OR': case 'NOR': {
+        const bx=gate.type==='NOR'?66:76;
+        svg.appendChild(E('path',{d:`M 10,3 Q 22,25 10,47 Q 30,47 50,47 Q ${bx},47 ${bx},25 Q ${bx},3 50,3 Q 30,3 10,3 Z`,style:`fill:${GF};stroke:${GS};stroke-width:1.5`}));
+        if(gate.type==='NOR') svg.appendChild(E('circle',{cx:72,cy:25,r:5,style:`fill:${GF};stroke:${GS};stroke-width:1.5`}));
+        svg.appendChild(T(gate.type,{x:42,y:29,'text-anchor':'middle',style:`fill:#7aa88a;${mono};font-size:9px`}));
+        break;
+      }
+      case 'XOR': case 'XNOR': {
+        const bx=gate.type==='XNOR'?66:76;
+        svg.appendChild(E('path',{d:`M 16,3 Q 28,25 16,47 Q 36,47 56,47 Q ${bx},47 ${bx},25 Q ${bx},3 56,3 Q 36,3 16,3 Z`,style:`fill:${GF};stroke:${GS};stroke-width:1.5`}));
+        svg.appendChild(E('path',{d:`M 10,3 Q 22,25 10,47`,style:`fill:none;stroke:${GS};stroke-width:1.5`}));
+        if(gate.type==='XNOR') svg.appendChild(E('circle',{cx:72,cy:25,r:5,style:`fill:${GF};stroke:${GS};stroke-width:1.5`}));
+        svg.appendChild(T(gate.type,{x:43,y:29,'text-anchor':'middle',style:`fill:#7aa88a;${mono};font-size:9px`}));
+        break;
+      }
+    }
+
+    // Port hit circles + visible dots
+    sp.ins.forEach((p,i) => {
+      const w=wires.find(w=>w.tId===gate.id&&w.tP===i),dc=w?(w.sig===1?HI:w.sig===0?LO:GS):GS;
+      const c=E('circle',{cx:p.x,cy:p.y,r:7,style:'fill:transparent;cursor:crosshair'});
+      c.addEventListener('mousedown',ev=>{ev.stopPropagation();ev.preventDefault();handlePort(gate.id,false,i);});
+      c.addEventListener('click',ev=>ev.stopPropagation());
+      svg.appendChild(c);
+      svg.appendChild(E('circle',{cx:p.x,cy:p.y,r:3,style:`fill:${GF};stroke:${dc};stroke-width:1.5;pointer-events:none`}));
+    });
+    sp.outs.forEach((p,i) => {
+      const c=E('circle',{cx:p.x,cy:p.y,r:7,style:'fill:transparent;cursor:crosshair'});
+      c.addEventListener('mousedown',ev=>{ev.stopPropagation();ev.preventDefault();handlePort(gate.id,true,i);});
+      c.addEventListener('click',ev=>ev.stopPropagation());
+      svg.appendChild(c);
+      svg.appendChild(E('circle',{cx:p.x,cy:p.y,r:3,style:`fill:${sc};stroke:${GS};stroke-width:1.2;pointer-events:none`}));
+    });
+  }
+
+  /* ── Create / refresh gate element ───────────────── */
+  function renderGate(gate) {
+    let div=document.getElementById(`g${gate.id}`);
+    const sp=SP[gate.type];
+    const isIO=gate.type==='INPUT'||gate.type==='OUTPUT';
+
+    if (!div) {
+      div=document.createElement('div');
+      div.id=`g${gate.id}`;
+      div.className='gate-el'+(gate.type==='INPUT'?' input-gate':'');
+      div.style.cssText=`left:${gate.x}px;top:${gate.y}px;width:${sp.vw}px`;
+
+      const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+      svg.setAttribute('width',sp.vw); svg.setAttribute('height',sp.vh);
+      svg.setAttribute('viewBox',`0 0 ${sp.vw} ${sp.vh}`);
+      svg.style.overflow='visible';
+      div.appendChild(svg);
+
+      let clickTimer=null;
+
+      div.addEventListener('mousedown',ev=>{
+        if(ev.button!==0) return;
+        ev.preventDefault();
+        drag={gate,ox:ev.clientX-gate.x,oy:ev.clientY-gate.y};
+        div.classList.add('dragging');
+      });
+
+      div.addEventListener('contextmenu',ev=>{
+        ev.preventDefault(); ev.stopPropagation(); deleteGate(gate.id);
+      });
+
+      // Hover delete button
+      const delBtn=document.createElement('button');
+      delBtn.className='del-btn'; delBtn.title='Delete gate';
+      delBtn.textContent='✕';
+      delBtn.addEventListener('mousedown',ev=>ev.stopPropagation());
+      delBtn.addEventListener('click',ev=>{ev.stopPropagation();deleteGate(gate.id);});
+      div.appendChild(delBtn);
+
+      // Click to select (for keyboard delete)
+      div.addEventListener('click',ev=>{
+        if(drag||conn) return;
+        document.querySelectorAll('.gate-el.selected').forEach(el=>el.classList.remove('selected'));
+        div.classList.add('selected');
+      });
+
+      if (gate.type==='INPUT') {
+        div.addEventListener('click',ev=>{
+          if(drag||conn) return;
+          if(clickTimer){clearTimeout(clickTimer);clickTimer=null;return;}
+          clickTimer=setTimeout(()=>{clickTimer=null;gate.val^=1;simulate();},200);
+        });
+      }
+
+      if (isIO) {
+        div.addEventListener('dblclick',ev=>{
+          ev.preventDefault();
+          if(clickTimer){clearTimeout(clickTimer);clickTimer=null;}
+          showRename(gate);
+        });
+      }
+
+      cv.appendChild(div);
+    }
+
+    div.style.left=gate.x+'px'; div.style.top=gate.y+'px';
+    const svg=div.querySelector('svg');
+    svg.innerHTML=''; drawGate(svg,gate);
+  }
+
+  /* ── Render wires ─────────────────────────────────── */
+  function renderWires() {
+    wsvg.innerHTML='';
+    for (const w of wires) {
+      const from=gates.find(g=>g.id===w.fId),to=gates.find(g=>g.id===w.tId);
+      if(!from||!to) continue;
+      const fp=portW(from,true,0),tp=portW(to,false,w.tP);
+      const s=w.sig,c=s===1?HI:s===0?LO:XC,sw=s===1?2.5:1.5,da=s===null?'6,4':'none';
+      const dx=Math.max(35,Math.abs(tp.x-fp.x)*0.5);
+      const d=`M ${fp.x},${fp.y} C ${fp.x+dx},${fp.y} ${tp.x-dx},${tp.y} ${tp.x},${tp.y}`;
+
+      // Wire group for hover coordination
+      const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.style.cssText='cursor:pointer';
+
+      const path=E('path',{d,style:`fill:none;stroke:${c};stroke-width:${sw};stroke-dasharray:${da};pointer-events:stroke`});
+      // Wide invisible hit area
+      const hit=E('path',{d,style:'fill:none;stroke:transparent;stroke-width:12;pointer-events:stroke'});
+
+      // Midpoint delete dot
+      const mx=(fp.x+tp.x)/2, my=(fp.y+tp.y)/2;
+      const delCircle=E('circle',{cx:mx,cy:my,r:8,style:'fill:#fee2e2;stroke:#fca5a5;stroke-width:1;opacity:0;transition:opacity .12s;pointer-events:none'});
+      const delX=document.createElementNS('http://www.w3.org/2000/svg','text');
+      delX.setAttribute('x',mx); delX.setAttribute('y',my+4);
+      delX.setAttribute('text-anchor','middle');
+      delX.style.cssText="font-size:10px;fill:#dc2626;opacity:0;pointer-events:none;font-family:sans-serif;font-weight:bold;transition:opacity .12s";
+      delX.textContent='✕';
+
+      g.appendChild(path); g.appendChild(hit); g.appendChild(delCircle); g.appendChild(delX);
+
+      g.addEventListener('mouseenter',()=>{
+        delCircle.style.opacity='1'; delX.style.opacity='1';
+        delCircle.style.pointerEvents='auto'; delX.style.pointerEvents='auto';
+      });
+      g.addEventListener('mouseleave',()=>{
+        delCircle.style.opacity='0'; delX.style.opacity='0';
+        delCircle.style.pointerEvents='none'; delX.style.pointerEvents='none';
+      });
+      g.addEventListener('click',ev=>{
+        const r=cv.getBoundingClientRect();
+        const cx=ev.clientX-r.left, cy=ev.clientY-r.top;
+        const dist=Math.hypot(cx-mx,cy-my);
+        if(dist<12){ev.stopPropagation();deleteWire(w.id);}
+      });
+      g.addEventListener('contextmenu',ev=>{ev.preventDefault();ev.stopPropagation();deleteWire(w.id);});
+      wsvg.appendChild(g);
+    }
+  }
+
+  function renderAll() { for(const g of gates) renderGate(g); renderWires(); }
+
+  /* ── Rename overlay ───────────────────────────────── */
+  function showRename(gate) {
+    const sp=SP[gate.type];
+    renInp.value=gate.name||'';
+    renInp.style.left=(gate.x+sp.vw/2-29)+'px';
+    renInp.style.top=(gate.y+sp.vh+4)+'px';
+    renInp.style.display='block';
+    renInp.dataset.gid=gate.id;
+    setTimeout(()=>{renInp.focus();renInp.select();},10);
+  }
+
+  function commitRename() {
+    const gate=gates.find(g=>g.id===+renInp.dataset.gid);
+    if(gate){
+      const val=renInp.value.trim().toUpperCase().slice(0,8);
+      gate.name=val||(gate.type==='INPUT'?'A':'Y');
+      simulate(); setS(`Renamed to "${gate.name}".`);
+    }
+    renInp.style.display='none';
+  }
+
+  renInp.addEventListener('keydown',ev=>{
+    if(ev.key==='Enter'){ev.preventDefault();commitRename();}
+    if(ev.key==='Escape'){ev.preventDefault();renInp.style.display='none';}
+  });
+  renInp.addEventListener('blur',commitRename);
+
+  /* ── Port handling ────────────────────────────────── */
+  function handlePort(gId,isOut,pIdx) {
+    if(!conn){
+      conn={gId,isOut,pIdx}; document.body.classList.add('connecting');
+      setS(isOut?'Click an INPUT port to complete the wire. [Esc] to cancel'
+                :'Click an OUTPUT port to complete the wire. [Esc] to cancel');
+      return;
+    }
+    const from=conn; conn=null; tsvg.innerHTML=''; document.body.classList.remove('connecting');
+    let out,inp;
+    if(from.isOut&&!isOut)      {out={id:from.gId,p:from.pIdx};inp={id:gId,p:pIdx};}
+    else if(!from.isOut&&isOut) {out={id:gId,p:pIdx};inp={id:from.gId,p:from.pIdx};}
+    else{setS('Connect an OUTPUT port (right) to an INPUT port (left).');return;}
+    if(out.id===inp.id){setS('Cannot connect a gate to itself.');return;}
+    if(wires.find(w=>w.tId===inp.id&&w.tP===inp.p)){setS('That input is already wired — right-click to delete it first.');return;}
+    wires.push({id:uid++,fId:out.id,fP:0,tId:inp.id,tP:inp.p,sig:null});
+    simulate(); setS('Connected! Toggle INPUT gates by clicking them.');
+  }
+
+  cv.addEventListener('mousemove',ev=>{
+    if(!conn){tsvg.innerHTML='';return;}
+    const r=cv.getBoundingClientRect(),mx=ev.clientX-r.left,my=ev.clientY-r.top;
+    const g=gates.find(g=>g.id===conn.gId); if(!g) return;
+    const fp=portW(g,conn.isOut,conn.pIdx);
+    const dx=Math.max(30,Math.abs(mx-fp.x)*0.5);
+    const d=conn.isOut
+      ?`M ${fp.x},${fp.y} C ${fp.x+dx},${fp.y} ${mx-dx},${my} ${mx},${my}`
+      :`M ${fp.x},${fp.y} C ${fp.x-dx},${fp.y} ${mx+dx},${my} ${mx},${my}`;
+    tsvg.innerHTML=`<path d="${d}" fill="none" stroke="${HI}" stroke-width="1.5" stroke-dasharray="6,4" opacity="0.55"/>`;
+  });
+
+  cv.addEventListener('click',ev=>{
+    if(ev.target===cv||ev.target.closest('#w-svg')){
+      conn=null;tsvg.innerHTML='';document.body.classList.remove('connecting');
+      document.querySelectorAll('.gate-el.selected').forEach(el=>el.classList.remove('selected'));
+      setS('Click a gate type in the toolbar to begin.');
+    }
+  });
+
+  window.addEventListener('mousemove',ev=>{
+    if(!drag) return;
+    drag.gate.x=ev.clientX-drag.ox; drag.gate.y=ev.clientY-drag.oy;
+    const el=document.getElementById(`g${drag.gate.id}`);
+    if(el){el.style.left=drag.gate.x+'px';el.style.top=drag.gate.y+'px';}
+    renderWires();
+  });
+
+  window.addEventListener('mouseup',()=>{
+    if(drag){document.getElementById(`g${drag.gate.id}`)?.classList.remove('dragging');drag=null;}
+  });
+
+  window.addEventListener('keydown',ev=>{
+    if(ev.key==='Escape'){
+      conn=null;tsvg.innerHTML='';renInp.style.display='none';
+      document.body.classList.remove('connecting');setS('Cancelled.');
+    }
+    if((ev.key==='Delete'||ev.key==='Backspace')&&document.activeElement.tagName!=='INPUT'){
+      const sel=document.querySelector('.gate-el.selected');
+      if(sel){const id=+sel.id.slice(1);deleteGate(id);}
+    }
+  });
+
+  /* ── Delete ───────────────────────────────────────── */
+  function deleteGate(id) {
+    gates=gates.filter(g=>g.id!==id); wires=wires.filter(w=>w.fId!==id&&w.tId!==id);
+    document.getElementById(`g${id}`)?.remove(); simulate(); setS('Gate deleted.');
+  }
+  function deleteWire(id){wires=wires.filter(w=>w.id!==id);simulate();setS('Wire deleted.');}
+
+  /* ── Truth Table ──────────────────────────────────── */
+  function buildTruthTable() {
+    const inputs  = gates.filter(g=>g.type==='INPUT').sort((a,b)=>a.id-b.id);
+    const outputs = gates.filter(g=>g.type==='OUTPUT').sort((a,b)=>a.id-b.id);
+    if(!inputs.length)   return{err:'Add at least one INPUT gate first.'};
+    if(!outputs.length)  return{err:'Add at least one OUTPUT gate first.'};
+    if(inputs.length>8)  return{err:`Too many inputs (${inputs.length}) — max 8 supported.`};
+
+    const saved=inputs.map(g=>g.val), n=inputs.length, rows=[];
+    for(let mask=0;mask<(1<<n);mask++){
+      inputs.forEach((g,i)=>{g.val=(mask>>(n-1-i))&1;});
+      simulateCore();
+      rows.push({
+        ins:  inputs.map(g=>g._o),
+        outs: outputs.map(g=>{const w=wires.find(w=>w.tId===g.id);return w?w.sig:null;}),
+      });
+    }
+    inputs.forEach((g,i)=>{g.val=saved[i];}); simulate();
+    return{inputs,outputs,rows};
+  }
+
+  /* ── Helpers ──────────────────────────────────────── */
+  function setS(msg){stMsg.textContent=msg;}
+  function updateStats(){sGates.textContent=gates.length;sWires.textContent=wires.length;}
+  function valBadge(v){
+    if(v===1) return`<span class="tt-hi">1</span>`;
+    if(v===0) return`<span class="tt-lo">0</span>`;
+    return          `<span class="tt-x">X</span>`;
+  }
+  function valStr(v){ return v===1?'1':v===0?'0':'X'; }
+
+  let lastTT = null;
+
+  /* ── Public API ───────────────────────────────────── */
+  return {
+    spawn(type){
+      const rect=cv.getBoundingClientRect(),sp=SP[type];
+      const gate={
+        id:uid++,type,
+        x:60+Math.random()*Math.max(50,rect.width-sp.vw-120),
+        y:40+Math.random()*Math.max(50,rect.height-sp.vh-80),
+        val:0,_o:null,
+        name:(type==='INPUT'||type==='OUTPUT')?nextName(type):'',
+      };
+      gates.push(gate); renderGate(gate); simulate();
+      const isIO=type==='INPUT'||type==='OUTPUT';
+      setS(`${type} gate "${gate.name||type}" added.${isIO?' Double-click to rename.':''}`);
+    },
+
+    clearAll(){
+      gates=[];wires=[];
+      document.querySelectorAll('.gate-el').forEach(el=>el.remove());
+      renderWires();updateStats();setS('Canvas cleared.');
+    },
+
+    openTT(){
+      const result=buildTruthTable();
+      if(result.err){setS(result.err);return;}
+      lastTT=result;
+      const{inputs,outputs,rows}=result;
+
+      document.getElementById('tt-sub').textContent=
+        `${inputs.length} input${inputs.length>1?'s':''}  ·  ${outputs.length} output${outputs.length>1?'s':''}  ·  ${rows.length} rows`;
+
+      let head='<thead><tr>';
+      inputs.forEach(g=>{head+=`<th class="col-in">${g.name||'?'}</th>`;});
+      outputs.forEach(g=>{head+=`<th class="col-out">${g.name||'?'}</th>`;});
+      head+='</tr></thead>';
+
+      let body='<tbody>';
+      rows.forEach(row=>{
+        body+='<tr>';
+        row.ins.forEach(v=>{body+=`<td>${valBadge(v)}</td>`;});
+        row.outs.forEach(v=>{body+=`<td>${valBadge(v)}</td>`;});
+        body+='</tr>';
+      });
+      body+='</tbody>';
+
+      document.getElementById('tt-table').innerHTML=head+body;
+      document.getElementById('tt-note').textContent=
+        rows.some(r=>r.outs.includes(null)) ? 'X = output disconnected or circuit incomplete.' : '';
+
+      document.getElementById('tt-overlay').classList.add('open');
+    },
+
+    closeTT(){document.getElementById('tt-overlay').classList.remove('open');},
+
+    exportCSV(){
+      if(!lastTT){setS('Open the truth table first.');return;}
+      const{inputs,outputs,rows}=lastTT;
+      const headers=[...inputs.map(g=>g.name||'?'),...outputs.map(g=>g.name||'?')];
+      const lines=[headers.join(',')];
+      rows.forEach(row=>{
+        lines.push([...row.ins.map(valStr),...row.outs.map(valStr)].join(','));
+      });
+      const blob=new Blob([lines.join('\n')],{type:'text/csv'});
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(blob);
+      a.download='truth_table.csv';
+      a.click(); URL.revokeObjectURL(a.href);
+      setS('CSV downloaded.');
+    },
+
+    exportPNG(){
+      if(!lastTT){setS('Open the truth table first.');return;}
+      const{inputs,outputs,rows}=lastTT;
+      const cols=[...inputs.map(g=>({name:g.name||'?',type:'in'})),...outputs.map(g=>({name:g.name||'?',type:'out'}))];
+
+      const PAD=24, COL_W=72, ROW_H=34, HEAD_H=42;
+      const TITLE_H=62, FOOT_H=36;
+      const tableW=cols.length*COL_W;
+      const W=Math.max(PAD*2+tableW, 320);
+      const H=TITLE_H+HEAD_H+rows.length*ROW_H+FOOT_H;
+
+      const canvas=document.createElement('canvas');
+      const DPR=2;
+      canvas.width=W*DPR; canvas.height=H*DPR;
+      const ctx=canvas.getContext('2d');
+      ctx.scale(DPR,DPR);
+
+      // Background
+      ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,W,H);
+
+      // Title bar
+      ctx.fillStyle='#f0fdf4'; ctx.fillRect(0,0,W,TITLE_H);
+
+      ctx.fillStyle='#15803d';
+      ctx.font='bold 13px "Courier New", monospace';
+      ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+      ctx.fillText('TRUTH TABLE', PAD, 22);
+
+      const sub=`${inputs.length} input${inputs.length>1?'s':''} · ${outputs.length} output${outputs.length>1?'s':''} · ${rows.length} rows`;
+      ctx.fillStyle='#94a3b8';
+      ctx.font='10px "Courier New", monospace';
+      ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+      ctx.fillText(sub, PAD, 42);
+
+      // Separator line under title
+      ctx.strokeStyle='#d4ddd6'; ctx.lineWidth=0.5;
+      ctx.beginPath(); ctx.moveTo(0,TITLE_H); ctx.lineTo(W,TITLE_H); ctx.stroke();
+
+      // Center the table horizontally
+      const tableX=Math.floor((W-tableW)/2);
+      const tableTop=TITLE_H;
+
+      // Header row
+      cols.forEach((col,i)=>{
+        const x=tableX+i*COL_W, y=tableTop;
+        ctx.fillStyle=col.type==='in'?'#f0fdf4':'#faf5ff';
+        ctx.fillRect(x,y,COL_W,HEAD_H);
+        ctx.strokeStyle='#d4ddd6'; ctx.lineWidth=0.5;
+        ctx.strokeRect(x,y,COL_W,HEAD_H);
+        ctx.fillStyle=col.type==='in'?'#15803d':'#7c3aed';
+        ctx.font='bold 11px "Courier New", monospace';
+        ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText(col.name, x+COL_W/2, y+HEAD_H/2);
+      });
+
+      // Data rows
+      rows.forEach((row,ri)=>{
+        const vals=[...row.ins,...row.outs];
+        const y=tableTop+HEAD_H+ri*ROW_H;
+        vals.forEach((v,ci)=>{
+          const x=tableX+ci*COL_W;
+          ctx.fillStyle=ri%2===0?'#ffffff':'#f8fafb';
+          ctx.fillRect(x,y,COL_W,ROW_H);
+          ctx.strokeStyle='#d4ddd6'; ctx.lineWidth=0.5;
+          ctx.strokeRect(x,y,COL_W,ROW_H);
+
+          const label=valStr(v);
+          const bw=30, bh=20, bx=x+COL_W/2-bw/2, by=y+ROW_H/2-bh/2;
+          ctx.fillStyle=v===1?'#dcfce7':v===0?'#f1f5f9':'#fef9c3';
+          roundRect(ctx,bx,by,bw,bh,4); ctx.fill();
+          ctx.fillStyle=v===1?'#15803d':v===0?'#64748b':'#a16207';
+          ctx.font='bold 12px "Courier New", monospace';
+          ctx.textAlign='center'; ctx.textBaseline='middle';
+          ctx.fillText(label, x+COL_W/2, y+ROW_H/2+0.5);
+        });
+      });
+
+      // Outer border around table
+      ctx.strokeStyle='#b0c4b8'; ctx.lineWidth=1;
+      ctx.strokeRect(tableX, tableTop, tableW, HEAD_H+rows.length*ROW_H);
+
+      // Footer — two separate lines, well below table
+      const footY=tableTop+HEAD_H+rows.length*ROW_H+12;
+      ctx.fillStyle='#b0c4b8'; ctx.font='10px "Courier New", monospace';
+      ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+      ctx.fillText('Generated by LogicSim', PAD, footY);
+      ctx.textAlign='right';
+      ctx.fillText(new Date().toLocaleDateString(), W-PAD, footY);
+
+      const a=document.createElement('a');
+      a.href=canvas.toDataURL('image/png');
+      a.download='truth_table.png';
+      a.click();
+      setS('PNG downloaded.');
+    }
+  };
+
+  function roundRect(ctx,x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.lineTo(x+w-r,y); ctx.arcTo(x+w,y,x+w,y+r,r);
+    ctx.lineTo(x+w,y+h-r); ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
+    ctx.lineTo(x+r,y+h); ctx.arcTo(x,y+h,x,y+h-r,r);
+    ctx.lineTo(x,y+r); ctx.arcTo(x,y,x+r,y,r);
+    ctx.closePath();
+  }
+})();
+</script>
+</body>
+</html>

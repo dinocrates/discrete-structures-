@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Truth Table Builder — §1.1 & §1.3</title>
+<style>
+:root{--bg:#fff;--bg2:#f8fafc;--bg3:#f1f5f9;--text:#0f172a;--text2:#475569;--text3:#94a3b8;--border:#e2e8f0;--primary:#2563eb;--pbg:#eff6ff;--green:#15803d;--gbg:#f0fdf4;--red:#b91c1c;--rbg:#fef2f2;--amber:#92400e;--abg:#fffbeb;--mono:ui-monospace,'Cascadia Code','Fira Code','Courier New',monospace;--sans:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;--r:8px;--rs:5px;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:15px;line-height:1.6;padding:1.5rem;max-width:780px;margin:0 auto;}
+.badge{display:inline-block;background:var(--pbg);color:var(--primary);font-size:12px;font-weight:600;padding:3px 10px;border-radius:99px;margin-bottom:.85rem;letter-spacing:.02em;}
+h1{font-size:21px;font-weight:700;margin-bottom:.4rem;}
+.desc{font-size:14px;color:var(--text2);margin-bottom:1.25rem;line-height:1.7;}
+.label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:.4rem;}
+.examples{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1.25rem;}
+.ex{font-family:var(--mono);font-size:13px;padding:4px 12px;border-radius:99px;background:var(--bg2);border:1.5px solid var(--border);cursor:pointer;color:var(--text2);transition:all .15s;}
+.ex:hover{background:var(--pbg);border-color:var(--primary);color:var(--primary);}
+.input-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;}
+input{flex:1;min-width:220px;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--rs);font-size:15px;font-family:var(--mono);outline:none;color:var(--text);background:var(--bg);}
+input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--pbg);}
+button{padding:8px 18px;border:1.5px solid var(--border);border-radius:var(--rs);background:var(--bg);color:var(--text);font-size:14px;font-family:var(--sans);cursor:pointer;transition:background .15s;}
+button:hover{background:var(--bg3);}
+.btn-primary{background:var(--primary);color:#fff;border-color:var(--primary);}
+.btn-primary:hover{background:#1d4ed8;border-color:#1d4ed8;}
+.syms{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;}
+.sym{padding:5px 11px;font-size:16px;font-family:var(--mono);border-radius:var(--rs);border:1.5px solid var(--border);background:var(--bg2);cursor:pointer;line-height:1;transition:all .15s;}
+.sym:hover{background:var(--bg3);border-color:var(--text3);}
+.hint{font-size:12px;color:var(--text3);line-height:1.8;margin-bottom:1.25rem;}
+.hint code{font-family:var(--mono);background:var(--bg2);padding:1px 5px;border-radius:3px;font-size:12px;color:var(--text2);}
+.error{color:var(--red);font-size:14px;margin-top:12px;padding:10px 14px;background:var(--rbg);border-radius:var(--r);}
+.tt-wrap{overflow-x:auto;margin-top:1rem;border:1px solid var(--border);border-radius:var(--r);}
+table{border-collapse:collapse;font-size:14px;width:100%;}
+th{padding:9px 18px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);border-bottom:1.5px solid var(--border);white-space:nowrap;background:var(--bg2);}
+td{padding:7px 18px;text-align:center;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:14px;}
+tr:last-child td{border-bottom:none;}
+.tv{color:var(--green);font-weight:700;}
+.fv{color:var(--red);font-weight:700;}
+.result-th{color:var(--text)!important;font-family:var(--mono);text-transform:none!important;letter-spacing:0!important;font-size:13px!important;}
+.result-td{background:var(--bg2);font-size:15px!important;}
+.verdict{margin-top:1rem;padding:11px 15px;border-radius:var(--r);font-size:14px;font-weight:500;line-height:1.5;}
+.v-t{background:var(--gbg);color:var(--green);border:1px solid #bbf7d0;}
+.v-c{background:var(--abg);color:var(--amber);border:1px solid #fde68a;}
+.v-x{background:var(--rbg);color:var(--red);border:1px solid #fecaca;}
+</style>
+</head>
+<body>
+
+<div class="badge">§1.1 · §1.3 — Discrete Mathematics</div>
+<h1>Truth Table Builder</h1>
+<p class="desc">Enter any propositional formula and build its complete truth table. Each row tests one possible combination of truth values for the variables. The last column shows the overall result of the formula for that row.</p>
+
+<div class="label">Quick examples — click to load</div>
+<div class="examples">
+  <button class="ex" onclick="load('P ∧ Q')">P ∧ Q</button>
+  <button class="ex" onclick="load('P ∨ ¬P')">P ∨ ¬P</button>
+  <button class="ex" onclick="load('P → Q')">P → Q</button>
+  <button class="ex" onclick="load('(P → Q) ∧ P')">Modus ponens</button>
+  <button class="ex" onclick="load('¬(P ∧ Q) ↔ (¬P ∨ ¬Q)')">De Morgan</button>
+  <button class="ex" onclick="load('(P → Q) → ((Q → R) → (P → R))')">Hypothetical syllogism</button>
+  <button class="ex" onclick="load('(P ∨ Q) ∧ ¬P')">Disjunctive syllogism</button>
+</div>
+
+<div class="label">Enter your formula</div>
+<div class="input-row">
+  <input id="fin" type="text" value="(P → Q) ∧ P" placeholder="e.g.  (P ∧ Q) → R" spellcheck="false" />
+  <button class="btn-primary" onclick="buildTable()">Build table</button>
+</div>
+
+<div class="syms">
+  <button class="sym" title="NOT — insert ¬" onclick="ins('¬')">¬</button>
+  <button class="sym" title="AND — insert ∧" onclick="ins('∧')">∧</button>
+  <button class="sym" title="OR — insert ∨" onclick="ins('∨')">∨</button>
+  <button class="sym" title="IMPLIES — insert →" onclick="ins('→')">→</button>
+  <button class="sym" title="IFF — insert ↔" onclick="ins('↔')">↔</button>
+  <button class="sym" title="Parentheses" onclick="insParen()">(  )</button>
+</div>
+
+<p class="hint">
+  Symbols: <code>¬</code> or <code>~</code> = NOT &nbsp;·&nbsp; <code>∧</code> or <code>&amp;</code> = AND &nbsp;·&nbsp; <code>∨</code> or <code>|</code> = OR &nbsp;·&nbsp;
+  <code>→</code> or <code>-&gt;</code> = IMPLIES &nbsp;·&nbsp; <code>↔</code> or <code>&lt;-&gt;</code> = IFF<br>
+  Variables are single letters A–Z. Parentheses group sub-expressions. Precedence (highest to lowest): ¬ · ∧ · ∨ · → · ↔
+</p>
+
+<div id="out"></div>
+
+<script>
+const inp = document.getElementById('fin');
+
+function ins(sym) {
+  const s = inp.selectionStart, e = inp.selectionEnd, v = inp.value;
+  inp.value = v.slice(0,s) + ' ' + sym + ' ' + v.slice(e);
+  inp.selectionStart = inp.selectionEnd = s + sym.length + 2;
+  inp.focus();
+}
+
+function insParen() {
+  const s = inp.selectionStart, e = inp.selectionEnd, v = inp.value;
+  const sel = v.slice(s, e);
+  inp.value = v.slice(0,s) + '(' + sel + ')' + v.slice(e);
+  inp.selectionStart = sel ? s : s + 1;
+  inp.selectionEnd = sel ? s + sel.length + 2 : s + 1;
+  inp.focus();
+}
+
+function load(f) { inp.value = f; buildTable(); }
+
+inp.addEventListener('keydown', e => { if (e.key === 'Enter') buildTable(); });
+
+// ─── PARSER ───────────────────────────────────────────────────────────────
+function tok(s) {
+  const t = []; let i = 0;
+  while (i < s.length) {
+    const c = s[i];
+    if (/\s/.test(c)) { i++; continue; }
+    if (c === '(') { t.push('('); i++; }
+    else if (c === ')') { t.push(')'); i++; }
+    else if (c === '¬' || c === '~' || c === '!') { t.push('NOT'); i++; }
+    else if (c === '∧' || c === '^') { t.push('AND'); i++; }
+    else if (c === '&') { t.push('AND'); i++; if (s[i] === '&') i++; }
+    else if (c === '∨') { t.push('OR'); i++; }
+    else if (c === '|') { t.push('OR'); i++; if (s[i] === '|') i++; }
+    else if (c === '→') { t.push('IMP'); i++; }
+    else if (c === '-' && s[i+1] === '>') { t.push('IMP'); i += 2; }
+    else if (c === '↔') { t.push('IFF'); i++; }
+    else if (c === '<' && s[i+1] === '-' && s[i+2] === '>') { t.push('IFF'); i += 3; }
+    else if (/[a-zA-Z]/.test(c)) { t.push({ v: c.toUpperCase() }); i++; }
+    else i++;
+  }
+  return t;
+}
+
+function prs(tokens) {
+  let i = 0;
+  const pk = () => tokens[i];
+  const nx = () => tokens[i++];
+  function pI()  { let l = pIm(); while (pk()==='IFF') { nx(); l = {op:'iff',l,r:pIm()}; } return l; }
+  function pIm() { const l = pO(); if (pk()==='IMP') { nx(); return {op:'imp',l,r:pIm()}; } return l; }
+  function pO()  { let l = pA(); while (pk()==='OR')  { nx(); l = {op:'or', l,r:pA()}; } return l; }
+  function pA()  { let l = pN(); while (pk()==='AND') { nx(); l = {op:'and',l,r:pN()}; } return l; }
+  function pN()  { if (pk()==='NOT') { nx(); return {op:'not',x:pN()}; } return pAt(); }
+  function pAt() {
+    const t = pk();
+    if (t === '(') { nx(); const n = pI(); if (pk() === ')') nx(); return n; }
+    if (t && t.v)  { nx(); return {op:'var', v:t.v}; }
+    return null;
+  }
+  return pI();
+}
+
+function gv(n, s = new Set()) {
+  if (!n) return s;
+  if (n.op === 'var') s.add(n.v);
+  [n.l, n.r, n.x].forEach(c => { if (c) gv(c, s); });
+  return s;
+}
+
+function ev(n, env) {
+  if (!n) return false;
+  switch (n.op) {
+    case 'var':  return !!env[n.v];
+    case 'not':  return !ev(n.x, env);
+    case 'and':  return ev(n.l, env) && ev(n.r, env);
+    case 'or':   return ev(n.l, env) || ev(n.r, env);
+    case 'imp':  return !ev(n.l, env) || ev(n.r, env);
+    case 'iff':  return ev(n.l, env) === ev(n.r, env);
+  }
+  return false;
+}
+
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function buildTable() {
+  const out = document.getElementById('out');
+  const f = inp.value.trim();
+  if (!f) { out.innerHTML = ''; return; }
+  let ast;
+  try { ast = prs(tok(f)); } catch(e) { out.innerHTML = '<div class="error">Parse error — check your formula and try again.</div>'; return; }
+  if (!ast) { out.innerHTML = '<div class="error">Could not parse formula — check your syntax.</div>'; return; }
+
+  const vars = Array.from(gv(ast)).sort();
+  if (!vars.length) { out.innerHTML = '<div class="error">No variables found in the formula.</div>'; return; }
+  if (vars.length > 5) { out.innerHTML = '<div class="error">Maximum 5 variables supported (would produce 32+ rows).</div>'; return; }
+
+  const n = vars.length;
+  const results = [];
+  let html = '<div class="tt-wrap"><table><thead><tr>';
+  vars.forEach(v => { html += `<th>${v}</th>`; });
+  html += `<th class="result-th">${esc(f)}</th></tr></thead><tbody>`;
+
+  for (let i = 0; i < Math.pow(2, n); i++) {
+    const env = {};
+    vars.forEach((v, j) => { env[v] = !!(i & (1 << (n - 1 - j))); });
+    const res = ev(ast, env);
+    results.push(res);
+    html += '<tr>';
+    vars.forEach(v => { html += `<td class="${env[v]?'tv':'fv'}">${env[v]?'T':'F'}</td>`; });
+    html += `<td class="result-td ${res?'tv':'fv'}">${res?'T':'F'}</td></tr>`;
+  }
+  html += '</tbody></table></div>';
+
+  const allT = results.every(r => r), allF = results.every(r => !r);
+  if (allT)       html += '<div class="verdict v-t">⊤ Tautology — the formula is true under every possible truth assignment.</div>';
+  else if (allF)  html += '<div class="verdict v-x">⊥ Contradiction — the formula is false under every possible truth assignment.</div>';
+  else            html += '<div class="verdict v-c">Contingency — the formula is true for some assignments and false for others.</div>';
+
+  out.innerHTML = html;
+}
+
+buildTable();
+</script>
+</body>
+</html>
