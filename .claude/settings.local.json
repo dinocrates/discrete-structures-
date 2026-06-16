@@ -3,7 +3,8 @@
     "allow": [
       "Bash(python -m http.server 8080)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080/)",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080/graph-tools/playground/)"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080/graph-tools/playground/)",
+      "Bash(git add *)"
     ]
   }
 }
