@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Graph Theory Tools — CSIS-213 Unit 02</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:        #f4f6f4;
+      --surface:   #ffffff;
+      --border:    #d4ddd6;
+      --accent:    #16a34a;
+      --accent-dim:#15803d;
+      --accent-lo: #dcfce7;
+      --text:      #1e293b;
+      --text-dim:  #475569;
+      --text-mute: #94a3b8;
+      --code-bg:   #f1f5f9;
+      --code-border:#e2e8f0;
+    }
+    html, body { min-height: 100%; background: var(--bg); color: var(--text); font-family: 'Share Tech Mono', monospace; }
+    body::before {
+      content: ''; position: fixed; inset: 0;
+      background-image: radial-gradient(circle, #c8d4cc 1px, transparent 1px);
+      background-size: 22px 22px; pointer-events: none; z-index: 0;
+    }
+    .page { position: relative; z-index: 1; max-width: 900px; margin: 0 auto; padding: 52px 24px 80px; }
+
+    .back { display: inline-block; font-size: 11px; color: var(--text-mute); text-decoration: none; margin-bottom: 28px; letter-spacing: 2px; }
+    .back:hover { color: var(--accent); }
+
+    .hero { margin-bottom: 48px; }
+    .hero-eyebrow { font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 500; letter-spacing: 4px; color: var(--text-mute); margin-bottom: 14px; }
+    .hero-title { font-family: 'Orbitron', monospace; font-size: clamp(20px, 3.5vw, 30px); font-weight: 700; color: var(--text); letter-spacing: 2px; line-height: 1.2; margin-bottom: 6px; }
+    .hero-title span { color: var(--accent); }
+    .hero-sub { font-size: 13px; color: var(--text-dim); letter-spacing: 1px; margin-bottom: 22px; line-height: 1.9; }
+    .hero-divider { width: 48px; height: 2px; background: var(--accent); border-radius: 1px; }
+
+    .section-label { font-family: 'Orbitron', monospace; font-size: 9px; font-weight: 700; letter-spacing: 4px; color: var(--accent-dim); margin-bottom: 14px; }
+
+    .tool-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-bottom: 48px; }
+
+    /* Card is now a div, not an anchor */
+    .tool-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      display: flex; flex-direction: column; gap: 9px;
+      transition: border-color .15s, box-shadow .15s, transform .15s;
+      position: relative; overflow: hidden;
+    }
+    .tool-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: var(--accent); transform: scaleX(0); transform-origin: left; transition: transform .2s;
+    }
+    .tool-card:hover { border-color: var(--accent-dim); box-shadow: 0 4px 16px rgba(22,163,74,.1); transform: translateY(-2px); }
+    .tool-card:hover::before { transform: scaleX(1); }
+
+    /* Main clickable area inside the card */
+    .card-body {
+      padding: 20px 18px 0;
+      display: flex; flex-direction: column; gap: 9px;
+      text-decoration: none; color: inherit; flex: 1;
+    }
+
+    .card-tag { font-size: 9px; letter-spacing: 2px; color: var(--accent-dim); background: var(--accent-lo); display: inline-block; padding: 2px 8px; border-radius: 3px; width: fit-content; }
+    .card-title { font-family: 'Orbitron', monospace; font-size: 12px; font-weight: 700; color: var(--text); letter-spacing: 1px; line-height: 1.4; }
+    .card-desc { font-size: 11px; color: var(--text-dim); line-height: 1.8; flex: 1; }
+
+    .card-footer {
+      padding: 0 18px 14px;
+      display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    }
+    .card-arrow { font-size: 11px; color: var(--text-mute); letter-spacing: 1px; display: flex; align-items: center; gap: 5px; transition: color .15s, gap .15s; text-decoration: none; }
+    .card-arrow-new { font-size: 10px; color: var(--text-mute); text-decoration: none; border: 1px solid var(--border); border-radius: 3px; padding: 1px 6px; transition: color .15s, border-color .15s; }
+    .tool-card:hover .card-arrow { color: var(--accent); gap: 9px; }
+    .tool-card:hover .card-arrow-new { color: var(--accent); border-color: var(--accent-lo); }
+
+    /* Embed toggle button */
+    .embed-toggle {
+      margin-left: auto;
+      font-size: 10px; color: var(--text-mute); letter-spacing: 1px;
+      background: none; border: 1px solid var(--border); border-radius: 3px;
+      padding: 2px 8px; cursor: pointer; font-family: 'Share Tech Mono', monospace;
+      transition: color .15s, border-color .15s, background .15s;
+    }
+    .embed-toggle:hover { color: var(--accent); border-color: var(--accent-lo); background: var(--accent-lo); }
+    .embed-toggle.open { color: var(--accent); border-color: var(--accent-lo); background: var(--accent-lo); }
+
+    /* Embed code panel */
+    .embed-panel {
+      display: none;
+      margin: 0 14px 14px;
+      background: var(--code-bg);
+      border: 1px solid var(--code-border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .embed-panel.open { display: block; }
+
+    .embed-panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 7px 12px;
+      border-bottom: 1px solid var(--code-border);
+      font-size: 10px; letter-spacing: 2px; color: var(--text-mute);
+    }
+    .copy-btn {
+      font-size: 10px; color: var(--text-mute); background: none;
+      border: 1px solid var(--code-border); border-radius: 3px;
+      padding: 2px 8px; cursor: pointer; font-family: 'Share Tech Mono', monospace;
+      transition: all .15s;
+    }
+    .copy-btn:hover { color: var(--accent); border-color: var(--accent); }
+    .copy-btn.copied { color: var(--accent); border-color: var(--accent); }
+
+    .embed-code {
+      font-family: ui-monospace, 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+      font-size: 10px;
+      color: var(--text-dim);
+      line-height: 1.7;
+      white-space: pre;
+      overflow-x: auto;
+      padding: 10px 12px;
+      margin: 0;
+    }
+
+    .footer { border-top: 1px solid var(--border); padding-top: 22px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+    .footer-brand { font-family: 'Orbitron', monospace; font-size: 11px; font-weight: 700; letter-spacing: 4px; color: var(--accent); }
+    .footer-brand span { color: var(--text-mute); font-weight: 500; }
+    .footer-note { font-size: 10px; color: var(--text-mute); letter-spacing: 1px; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <a class="back" href="../index.html">← BACK TO TOOLKIT</a>
+
+  <div class="hero">
+    <div class="hero-eyebrow">CSIS-213 · UNIT 02</div>
+    <div class="hero-title">GRAPH<br><span>THEORY TOOLS</span></div>
+    <div class="hero-sub">
+      Interactive tools for Levin Chapter 2: Problems and Definitions.<br>
+      Build graphs, inspect structure, test definitions, and explore representations.
+    </div>
+    <div class="hero-divider"></div>
+  </div>
+
+  <div class="section-label">§2.1 — PROBLEMS AND DEFINITIONS</div>
+  <div class="tool-grid">
+
+    <!-- 1. Graph Playground -->
+    <div class="tool-card">
+      <a class="card-body" href="playground/index.html">
+        <div class="card-tag">§2.1 CORE TOOL</div>
+        <div class="card-title">GRAPH PLAYGROUND</div>
+        <div class="card-desc">
+          Build a graph by adding vertices and edges. Watch the vertex set, edge set, adjacency list, adjacency matrix, degree table, and Handshake Lemma update in real time.
+        </div>
+      </a>
+      <div class="card-footer">
+        <a class="card-arrow" href="playground/index.html">OPEN TOOL →</a>
+        <a class="card-arrow-new" href="playground/index.html" target="_blank" rel="noopener">↗ NEW WINDOW</a>
+        <button class="embed-toggle" onclick="toggleEmbed(this)">EMBED ↓</button>
+      </div>
+      <div class="embed-panel">
+        <div class="embed-panel-header">
+          <span>CANVAS EMBED CODE</span>
+          <button class="copy-btn" onclick="copyEmbed(this)">COPY</button>
+        </div>
+        <pre class="embed-code">&lt;p&gt;&lt;a href="https://dinocrates.github.io/cpp-interactive-tools/discrete/graph-tools/playground/" target="_blank" rel="noopener"&gt;Open Graph Playground in a new window&lt;/a&gt;&lt;/p&gt;
+
+&lt;iframe
+  src="https://dinocrates.github.io/cpp-interactive-tools/discrete/graph-tools/playground/"
+  width="100%"
+  height="860"
+  frameborder="0"
+  allowfullscreen&gt;
+&lt;/iframe&gt;</pre>
+      </div>
+    </div>
+
+    <!-- 2. Representation Translator -->
+    <div class="tool-card">
+      <a class="card-body" href="representation-translator/index.html">
+        <div class="card-tag">§2.1 · §2.6</div>
+        <div class="card-title">REPRESENTATION TRANSLATOR</div>
+        <div class="card-desc">
+          Enter a graph as an edge list, adjacency list, or adjacency matrix. The tool translates it into every other representation and draws the graph.
+        </div>
+      </a>
+      <div class="card-footer">
+        <a class="card-arrow" href="representation-translator/index.html">OPEN TOOL →</a>
+        <a class="card-arrow-new" href="representation-translator/index.html" target="_blank" rel="noopener">↗ NEW WINDOW</a>
+        <button class="embed-toggle" onclick="toggleEmbed(this)">EMBED ↓</button>
+      </div>
+      <div class="embed-panel">
+        <div class="embed-panel-header">
+          <span>CANVAS EMBED CODE</span>
+          <button class="copy-btn" onclick="copyEmbed(this)">COPY</button>
+        </div>
+        <pre class="embed-code">&lt;p&gt;&lt;a href="https://dinocrates.github.io/cpp-interactive-tools/discrete/graph-tools/representation-translator/" target="_blank" rel="noopener"&gt;Open Representation Translator in a new window&lt;/a&gt;&lt;/p&gt;
+
+&lt;iframe
+  src="https://dinocrates.github.io/cpp-interactive-tools/discrete/graph-tools/representation-translator/"
+  width="100%"
+  height="860"
+  frameborder="0"
+  allowfullscreen&gt;
+&lt;/iframe&gt;</pre>
+      </div>
+    </div>
+
+    <!-- 3. Degree Sequence Checker -->
+    <div class="tool-card">
+      <a class="card-body" href="degree-sequence/index.html">
+        <div class="card-tag">§2.1 · §2.4</div>
+        <div class="card-title">DEGREE SEQUENCE CHECKER</div>
+        <div class="card-desc">
+          Enter a degree sequence and test it against the Handshake Lemma and basic simple-graph constraints. Includes an optional Havel–Hakimi graphicality check.
+        </div>
+      </a>
+      <div class="card-footer">
+        <a class="card-arrow" href="degree-sequence/index.html">OPEN TOOL →</a>
+        <a class="card-arrow-new" href="degree-sequence/index.html" target="_blank" rel="noopener">↗ NEW WINDOW</a>
+        <button class="embed-toggle" onclick="toggleEmbed(this)">EMBED ↓</button>
+      </div>
+      <div class="embed-panel">
+        <div class="embed-panel-header">
+          <span>CANVAS EMBED CODE</span>
+          <button class="copy-btn" onclick="copyEmbed(this)">COPY</button>
+        </div>
+        <pre class="embed-code">&lt;p&gt;&lt;a href="https://dinocrates.github.io/cpp-interactive-tools/discrete/graph-tools/degree-sequence/" target="_blank" rel="noopener"&gt;Open Degree Sequence Checker in a new window&lt;/a&gt;&lt;/p&gt;
+
+&lt;iframe
+  src="https://dinocrates.github.io/cpp-interactive-tools/discrete/graph-tools/degree-sequence/"
+  width="100%"
+  height="860"
+  frameborder="0"
+  allowfullscreen&gt;
+&lt;/iframe&gt;</pre>
+      </div>
+    </div>
+
+    <!-- 4. Named Graph Builder -->
+    <div class="tool-card">
+      <a class="card-body" href="named-graphs/index.html">
+        <div class="card-tag">§2.1 · §2.3</div>
+        <div class="card-title">NAMED GRAPH BUILDER</div>
+        <div class="card-desc">
+          Generate Kₙ, Pₙ, Cₙ, and K_{m,n} with a click. See the drawing, vertex count, edge count, degree sequence, and formula for each graph family.
+        </div>
+      </a>
+      <div class="card-footer">
+        <a class="card-arrow" href="named-graphs/index.html">OPEN TOOL →</a>
+        <a class="card-arrow-new" href="named-graphs/index.html" target="_blank" rel="noopener">↗ NEW WINDOW</a>
+        <button class="embed-toggle" onclick="toggleEmbed(this)">EMBED ↓</button>
+      </div>
+      <div class="embed-panel">
+        <div class="embed-panel-header">
+          <span>CANVAS EMBED CODE</span>
+          <button class="copy-btn" onclick="copyEmbed(this)">COPY</button>
+        </div>
+        <pre class="embed-code">&lt;p&gt;&lt;a href="https://dinocrates.github.io/cpp-interactive-tools/discrete/graph-tools/named-graphs/" target="_blank" rel="noopener"&gt;Open Named Graph Builder in a new window&lt;/a&gt;&lt;/p&gt;
+
+&lt;iframe
+  src="https://dinocrates.github.io/cpp-interactive-tools/discrete/graph-tools/named-graphs/"
+  width="100%"
+  height="860"
+  frameborder="0"
+  allowfullscreen&gt;
+&lt;/iframe&gt;</pre>
+      </div>
+    </div>
+
+    <!-- 5. Graph Property Detective -->
+    <div class="tool-card">
+      <a class="card-body" href="property-detective/index.html">
+        <div class="card-tag">§2.1 · §2.2</div>
+        <div class="card-title">GRAPH PROPERTY DETECTIVE</div>
+        <div class="card-desc">
+          Build a graph and test graph definitions: connected, has cycle, complete, bipartite, path graph, cycle graph, tree, and forest. Each result explains why.
+        </div>
+      </a>
+      <div class="card-footer">
+        <a class="card-arrow" href="property-detective/index.html">OPEN TOOL →</a>
+        <a class="card-arrow-new" href="property-detective/index.html" target="_blank" rel="noopener">↗ NEW WINDOW</a>
+        <button class="embed-toggle" onclick="toggleEmbed(this)">EMBED ↓</button>
+      </div>
+      <div class="embed-panel">
+        <div class="embed-panel-header">
+          <span>CANVAS EMBED CODE</span>
+          <button class="copy-btn" onclick="copyEmbed(this)">COPY</button>
+        </div>
+        <pre class="embed-code">&lt;p&gt;&lt;a href="https://dinocrates.github.io/cpp-interactive-tools/discrete/graph-tools/property-detective/" target="_blank" rel="noopener"&gt;Open Graph Property Detective in a new window&lt;/a&gt;&lt;/p&gt;
+
+&lt;iframe
+  src="https://dinocrates.github.io/cpp-interactive-tools/discrete/graph-tools/property-detective/"
+  width="100%"
+  height="860"
+  frameborder="0"
+  allowfullscreen&gt;
+&lt;/iframe&gt;</pre>
+      </div>
+    </div>
+
+    <!-- 6. Same Graph or Different? -->
+    <div class="tool-card">
+      <a class="card-body" href="same-graph/index.html">
+        <div class="card-tag">§2.1</div>
+        <div class="card-title">SAME GRAPH OR DIFFERENT?</div>
+        <div class="card-desc">
+          Compare two graph drawings and decide: same graph, isomorphic but relabeled, or different? Drag vertices to rearrange and check optional vertex mappings.
+        </div>
+      </a>
+      <div class="card-footer">
+        <a class="card-arrow" href="same-graph/index.html">OPEN TOOL →</a>
+        <a class="card-arrow-new" href="same-graph/index.html" target="_blank" rel="noopener">↗ NEW WINDOW</a>
+        <button class="embed-toggle" onclick="toggleEmbed(this)">EMBED ↓</button>
+      </div>
+      <div class="embed-panel">
+        <div class="embed-panel-header">
+          <span>CANVAS EMBED CODE</span>
+          <button class="copy-btn" onclick="copyEmbed(this)">COPY</button>
+        </div>
+        <pre class="embed-code">&lt;p&gt;&lt;a href="https://dinocrates.github.io/cpp-interactive-tools/discrete/graph-tools/same-graph/" target="_blank" rel="noopener"&gt;Open Same Graph or Different? in a new window&lt;/a&gt;&lt;/p&gt;
+
+&lt;iframe
+  src="https://dinocrates.github.io/cpp-interactive-tools/discrete/graph-tools/same-graph/"
+  width="100%"
+  height="860"
+  frameborder="0"
+  allowfullscreen&gt;
+&lt;/iframe&gt;</pre>
+      </div>
+    </div>
+
+    <!-- 7. Königsberg Abstraction -->
+    <div class="tool-card">
+      <a class="card-body" href="konigsberg/index.html">
+        <div class="card-tag">§2.1 · §2.4</div>
+        <div class="card-title">KÖNIGSBERG ABSTRACTION</div>
+        <div class="card-desc">
+          See how the Seven Bridges of Königsberg becomes a graph. Click land masses and bridges to highlight the matching vertices and edges. Introduces multigraphs.
+        </div>
+      </a>
+      <div class="card-footer">
+        <a class="card-arrow" href="konigsberg/index.html">OPEN TOOL →</a>
+        <a class="card-arrow-new" href="konigsberg/index.html" target="_blank" rel="noopener">↗ NEW WINDOW</a>
+        <button class="embed-toggle" onclick="toggleEmbed(this)">EMBED ↓</button>
+      </div>
+      <div class="embed-panel">
+        <div class="embed-panel-header">
+          <span>CANVAS EMBED CODE</span>
+          <button class="copy-btn" onclick="copyEmbed(this)">COPY</button>
+        </div>
+        <pre class="embed-code">&lt;p&gt;&lt;a href="https://dinocrates.github.io/cpp-interactive-tools/discrete/graph-tools/konigsberg/" target="_blank" rel="noopener"&gt;Open Königsberg Abstraction in a new window&lt;/a&gt;&lt;/p&gt;
+
+&lt;iframe
+  src="https://dinocrates.github.io/cpp-interactive-tools/discrete/graph-tools/konigsberg/"
+  width="100%"
+  height="860"
+  frameborder="0"
+  allowfullscreen&gt;
+&lt;/iframe&gt;</pre>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <div class="footer-brand">DISCRETE<span>TOOLS</span></div>
+    <div class="footer-note">UNIT 02 · GRAPH THEORY · LEVIN 4TH ED.</div>
+  </div>
+
+</div>
+
+<script>
+function toggleEmbed(btn) {
+  const card = btn.closest('.tool-card');
+  const panel = card.querySelector('.embed-panel');
+  const open = panel.classList.toggle('open');
+  btn.classList.toggle('open', open);
+  btn.textContent = open ? 'EMBED ↑' : 'EMBED ↓';
+}
+
+function copyEmbed(btn) {
+  const panel = btn.closest('.embed-panel');
+  const code = panel.querySelector('.embed-code').textContent
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+  navigator.clipboard.writeText(code).then(() => {
+    btn.textContent = 'COPIED ✓';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'COPY'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+</script>
+</body>
+</html>

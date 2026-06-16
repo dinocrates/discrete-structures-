@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Königsberg Bridge Abstraction — §2.1</title>
+  <link rel="stylesheet" href="../shared/graph-style.css" />
+  <style>
+    body { padding: 1rem; }
+    .dual-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: .75rem; }
+    @media (max-width: 720px) { .dual-panel { grid-template-columns: 1fr; } }
+    .panel-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--text3); margin-bottom: 6px; }
+    .map-panel, .graph-panel {
+      background: #fafafa; border: 1.5px solid var(--border); border-radius: var(--r);
+      position: relative; overflow: hidden;
+    }
+    .map-panel svg, .graph-panel svg { display: block; width: 100%; touch-action: none; user-select: none; }
+    .explanation-box { background: var(--pbg); border: 1px solid var(--pborder); border-radius: var(--r); padding: 14px 16px; margin-top: 12px; font-size: 13px; color: var(--primary); line-height: 1.8; }
+    .explanation-box p { margin-bottom: 4px; }
+    .explanation-box p:last-child { margin-bottom: 0; }
+    .multigraph-note { background: var(--abg); border: 1px solid var(--aborder); border-radius: var(--rs); padding: 10px 14px; margin-top: 10px; font-size: 13px; color: var(--amber); line-height: 1.7; }
+    .deg-table { margin-top: 12px; }
+    .click-hint { font-size: 11px; color: var(--text3); margin-top: 4px; }
+    .highlight-land { fill: #fef9c3 !important; stroke: #ca8a04 !important; }
+    .highlight-bridge { stroke: #ca8a04 !important; stroke-width: 6 !important; }
+    .highlight-vertex { fill: #fef9c3 !important; stroke: #ca8a04 !important; }
+    .highlight-edge { stroke: #ca8a04 !important; stroke-width: 5 !important; }
+  </style>
+</head>
+<body>
+<div class="gt-page">
+
+  <a class="gt-back" href="../index.html">← Graph Theory Tools</a>
+
+  <div class="gt-header">
+    <div class="gt-badge">§2.1 · §2.4</div>
+    <div class="gt-title">Königsberg Bridge Abstraction</div>
+    <p class="gt-desc">In 1736, Euler asked: can you walk through Königsberg crossing each of the seven bridges exactly once? The key insight was to <em>abstract</em> the map into a graph. Click any land mass or bridge to see its graph counterpart.</p>
+  </div>
+
+  <div class="dual-panel">
+
+    <div>
+      <div class="panel-label">MAP VIEW — land masses and bridges</div>
+      <div class="map-panel">
+        <svg id="mapSvg" viewBox="0 0 360 320" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+      <p class="click-hint">Click a land mass or bridge to highlight it.</p>
+    </div>
+
+    <div>
+      <div class="panel-label">GRAPH VIEW — vertices and edges</div>
+      <div class="graph-panel">
+        <svg id="graphSvg" viewBox="0 0 360 320" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+      <p class="click-hint">Click a vertex or edge to highlight it.</p>
+    </div>
+
+  </div>
+
+  <!-- Degree table -->
+  <div class="deg-table">
+    <div class="gt-label" style="margin-bottom:6px;">DEGREE TABLE</div>
+    <div class="gt-table-wrap" style="max-width:340px;">
+      <table class="gt-table">
+        <thead><tr><th>Land Mass → Vertex</th><th>Bridges → Degree</th></tr></thead>
+        <tbody>
+          <tr><td>North Bank → A</td><td>3</td></tr>
+          <tr><td>South Bank → B</td><td>3</td></tr>
+          <tr><td>Kneiphof Island → C</td><td>5</td></tr>
+          <tr><td>East Island → D</td><td>3</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:12px;color:var(--text2);margin-top:6px;">All four vertices have <strong>odd degree</strong>. Degree sum = 14 = 2 × 7 edges. ✓</p>
+  </div>
+
+  <!-- Explanation -->
+  <div class="explanation-box">
+    <p><strong>Land masses become vertices.</strong></p>
+    <p><strong>Bridges become edges.</strong></p>
+    <p>The exact size or shape of each land mass does not matter.</p>
+    <p>The exact length or material of each bridge does not matter.</p>
+    <p>Only the <strong>connection pattern</strong> matters.</p>
+  </div>
+
+  <div class="multigraph-note">
+    ⚠ <strong>This is a multigraph.</strong> More than one bridge connects the same pair of land masses — for example, two bridges connect the North Bank to Kneiphof Island. Simple graphs do not allow multiple edges between the same pair of vertices. The Königsberg graph is a multigraph.
+  </div>
+
+  <div style="margin-top:14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;font-size:13px;color:var(--text2);line-height:1.8;">
+    <strong>Why does this matter for Euler paths?</strong><br>
+    Euler proved that a graph has an Euler circuit (a path crossing every edge exactly once and returning to the start) only if <em>every vertex has even degree</em>. The Königsberg graph has all odd-degree vertices — so no such walk exists. This insight, studied in detail in §2.4, is already visible in the degree table above.
+  </div>
+
+</div>
+
+<script>
+// ── Data model ────────────────────────────────────────────────────────────────
+// Land masses: A=North Bank, B=South Bank, C=Kneiphof Island, D=East Island
+// Bridges (edges) as labeled pairs
+const LANDS = [
+  { id: 'A', label: 'A\nNorth Bank',  cx: 180, cy:  55, rx: 100, ry: 38, fill: '#e2f4ea' },
+  { id: 'B', label: 'B\nSouth Bank',  cx: 180, cy: 265, rx: 100, ry: 38, fill: '#e2f4ea' },
+  { id: 'C', label: 'C\nKneiphof',    cx: 130, cy: 160, rx:  70, ry: 55, fill: '#dbeafe' },
+  { id: 'D', label: 'D\nEast Island', cx: 300, cy: 160, rx:  48, ry: 36, fill: '#fef3c7' },
+];
+
+// Each bridge as {id, u, v, x1,y1, x2,y2} — approximate map positions
+const BRIDGES = [
+  { id: 'b1', u: 'A', v: 'C', x1: 120, y1:  80, x2:  95, y2: 118 },
+  { id: 'b2', u: 'A', v: 'C', x1: 148, y1:  82, x2: 140, y2: 112 },
+  { id: 'b3', u: 'B', v: 'C', x1:  95, y1: 205, x2: 100, y2: 235 },
+  { id: 'b4', u: 'B', v: 'C', x1: 140, y1: 208, x2: 148, y2: 240 },
+  { id: 'b5', u: 'A', v: 'B', x1: 185, y1:  90, x2: 185, y2: 230 },
+  { id: 'b6', u: 'C', v: 'D', x1: 198, y1: 145, x2: 255, y2: 145 },
+  { id: 'b7', u: 'C', v: 'D', x1: 198, y1: 175, x2: 255, y2: 175 },
+];
+
+// Graph vertex positions (for graph view)
+const GVERTS = {
+  A: { x: 180, y:  60, label: 'A' },
+  B: { x: 180, y: 260, label: 'B' },
+  C: { x:  80, y: 160, label: 'C' },
+  D: { x: 290, y: 160, label: 'D' },
+};
+
+let highlighted = null; // {type: 'land'|'bridge'|'vertex'|'edge', id}
+
+// ── Map SVG ───────────────────────────────────────────────────────────────────
+function buildMap() {
+  const svg = document.getElementById('mapSvg');
+  svg.innerHTML = '';
+
+  // Water background
+  const water = makeSVG('rect', { x:0,y:0,width:360,height:320, fill:'#bfdbfe', rx:0 });
+  svg.appendChild(water);
+
+  // Land masses
+  for (const land of LANDS) {
+    const el = makeSVG('ellipse', { cx: land.cx, cy: land.cy, rx: land.rx, ry: land.ry,
+      fill: land.fill, stroke: '#64748b', 'stroke-width': 1.5, id: 'map-land-' + land.id, cursor: 'pointer' });
+    el.classList.add('map-land');
+    el.addEventListener('click', () => highlight('land', land.id));
+    svg.appendChild(el);
+
+    // Label
+    const lines = land.label.split('\n');
+    const g = makeSVG('g', { 'pointer-events': 'none' });
+    const t1 = makeSVG('text', { x: land.cx, y: land.cy - 6, 'text-anchor': 'middle',
+      'dominant-baseline': 'middle', 'font-size': 14, 'font-weight': 700,
+      'font-family': "ui-monospace,'Courier New',monospace", fill: '#0f172a' });
+    t1.textContent = lines[0];
+    const t2 = makeSVG('text', { x: land.cx, y: land.cy + 12, 'text-anchor': 'middle',
+      'dominant-baseline': 'middle', 'font-size': 9,
+      'font-family': "-apple-system,sans-serif", fill: '#475569' });
+    t2.textContent = lines[1] || '';
+    g.appendChild(t1); g.appendChild(t2);
+    svg.appendChild(g);
+  }
+
+  // Bridges
+  for (const br of BRIDGES) {
+    const el = makeSVG('line', {
+      x1: br.x1, y1: br.y1, x2: br.x2, y2: br.y2,
+      stroke: '#92400e', 'stroke-width': 4, 'stroke-linecap': 'round',
+      id: 'map-bridge-' + br.id, cursor: 'pointer'
+    });
+    el.addEventListener('click', () => highlight('bridge', br.id));
+    svg.appendChild(el);
+
+    // Bridge label
+    const mx = (br.x1 + br.x2) / 2, my = (br.y1 + br.y2) / 2;
+    const lbl = makeSVG('text', { x: mx + 6, y: my, 'text-anchor': 'start', 'dominant-baseline': 'middle',
+      'font-size': 9, 'font-family': "ui-monospace,monospace", fill: '#92400e', 'pointer-events': 'none' });
+    lbl.textContent = br.id;
+    svg.appendChild(lbl);
+  }
+}
+
+// ── Graph SVG ─────────────────────────────────────────────────────────────────
+function buildGraph() {
+  const svg = document.getElementById('graphSvg');
+  svg.innerHTML = '';
+
+  const R = 20;
+
+  // Edges (multigraph — offset parallel edges)
+  const edgePairs = {};
+  for (const br of BRIDGES) {
+    const key = [br.u, br.v].sort().join('-');
+    if (!edgePairs[key]) edgePairs[key] = [];
+    edgePairs[key].push(br);
+  }
+
+  for (const br of BRIDGES) {
+    const key = [br.u, br.v].sort().join('-');
+    const group = edgePairs[key];
+    const idx = group.indexOf(br);
+    const a = GVERTS[br.u], b = GVERTS[br.v];
+
+    let pathD;
+    if (group.length === 1) {
+      pathD = `M${a.x},${a.y} L${b.x},${b.y}`;
+    } else {
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const len = Math.sqrt(dx*dx+dy*dy)||1;
+      const nx = -dy/len, ny = dx/len;
+      const offset = (idx - (group.length-1)/2) * 30;
+      const mx = (a.x+b.x)/2 + nx*offset, my = (a.y+b.y)/2 + ny*offset;
+      pathD = `M${a.x},${a.y} Q${mx},${my} ${b.x},${b.y}`;
+    }
+
+    const isHL = highlighted && highlighted.type === 'bridge' && highlighted.id === br.id
+               || highlighted && highlighted.type === 'land' && (highlighted.id === br.u || highlighted.id === br.v);
+
+    const edgePath = makeSVG('path', {
+      d: pathD, fill: 'none',
+      stroke: isHL ? '#ca8a04' : '#64748b',
+      'stroke-width': isHL ? 5 : 2,
+      'stroke-linecap': 'round',
+      id: 'graph-edge-' + br.id,
+      cursor: 'pointer'
+    });
+    edgePath.addEventListener('click', () => highlight('edge', br.id));
+
+    const hitPath = makeSVG('path', { d: pathD, fill: 'none', stroke: 'transparent', 'stroke-width': 14, cursor: 'pointer' });
+    hitPath.addEventListener('click', () => highlight('edge', br.id));
+
+    svg.appendChild(edgePath);
+    svg.appendChild(hitPath);
+  }
+
+  // Vertices
+  for (const [id, v] of Object.entries(GVERTS)) {
+    const isHL = highlighted && (highlighted.type === 'vertex' && highlighted.id === id
+                              || highlighted.type === 'land' && highlighted.id === id
+                              || highlighted.type === 'bridge' && (BRIDGES.find(b=>b.id===highlighted.id)?.u===id || BRIDGES.find(b=>b.id===highlighted.id)?.v===id)
+                              || highlighted.type === 'edge' && (BRIDGES.find(b=>b.id===highlighted.id)?.u===id || BRIDGES.find(b=>b.id===highlighted.id)?.v===id));
+    const g = makeSVG('g', { cursor: 'pointer', id: 'graph-vert-' + id });
+    const circle = makeSVG('circle', { cx: v.x, cy: v.y, r: R, fill: isHL ? '#fef9c3' : '#fff', stroke: isHL ? '#ca8a04' : '#334155', 'stroke-width': isHL ? 3 : 2 });
+    const text = makeSVG('text', { x: v.x, y: v.y, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-size': 13, 'font-weight': 700, 'font-family': "ui-monospace,'Courier New',monospace", fill: isHL ? '#92400e' : '#0f172a', 'pointer-events': 'none' });
+    text.textContent = id;
+    g.appendChild(circle); g.appendChild(text);
+    g.addEventListener('click', () => highlight('vertex', id));
+    svg.appendChild(g);
+  }
+}
+
+function highlight(type, id) {
+  if (highlighted && highlighted.type === type && highlighted.id === id) {
+    highlighted = null;
+  } else {
+    highlighted = { type, id };
+  }
+  // Sync: if clicking land/vertex, cross-highlight
+  buildMap();
+  buildGraph();
+  applyHighlights();
+}
+
+function applyHighlights() {
+  if (!highlighted) return;
+  const { type, id } = highlighted;
+
+  if (type === 'land' || type === 'vertex') {
+    // Highlight the land ellipse and graph vertex
+    const landId = type === 'land' ? id : id;
+    const mapEl = document.getElementById('map-land-' + landId);
+    if (mapEl) mapEl.classList.add('highlight-land');
+    const gEl = document.getElementById('graph-vert-' + landId);
+    // already handled in buildGraph via isHL
+  }
+
+  if (type === 'bridge' || type === 'edge') {
+    const brId = type === 'bridge' ? id : id;
+    const mapEl = document.getElementById('map-bridge-' + brId);
+    if (mapEl) mapEl.classList.add('highlight-bridge');
+  }
+}
+
+function makeSVG(tag, attrs = {}) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  return el;
+}
+
+buildMap();
+buildGraph();
+</script>
+</body>
+</html>

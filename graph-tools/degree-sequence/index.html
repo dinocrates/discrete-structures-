@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Degree Sequence Checker — §2.1</title>
+  <link rel="stylesheet" href="../shared/graph-style.css" />
+  <style>
+    body { padding: 1rem; }
+    .main-col { max-width: 640px; }
+    textarea.gt-input {
+      width: 100%; min-height: 60px; resize: vertical;
+      font-family: var(--mono); font-size: 14px; padding: 10px 12px;
+      border: 1.5px solid var(--border); border-radius: var(--rs);
+      background: var(--bg); color: var(--text); outline: none;
+    }
+    textarea.gt-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--pbg); }
+    .check-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .check-row:last-child { border-bottom: none; }
+    .check-icon { font-size: 16px; line-height: 1; flex-shrink: 0; margin-top: 2px; }
+    .check-label { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+    .check-detail { font-size: 12px; color: var(--text2); line-height: 1.6; }
+    .summary-box { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r); padding: 14px 16px; font-family: var(--mono); font-size: 13px; line-height: 2; color: var(--text2); }
+    .summary-box .hl { color: var(--text); font-weight: 700; }
+    .examples { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+    .ex { font-family: var(--mono); font-size: 12px; padding: 4px 12px; border-radius: 99px; background: var(--bg2); border: 1.5px solid var(--border); cursor: pointer; color: var(--text2); transition: all .15s; }
+    .ex:hover { background: var(--pbg); border-color: var(--primary); color: var(--primary); }
+    .hh-box { margin-top: 14px; padding: 12px 14px; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r); }
+    .hh-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text3); margin-bottom: 6px; }
+  </style>
+</head>
+<body>
+<div class="gt-page main-col">
+
+  <a class="gt-back" href="../index.html">← Graph Theory Tools</a>
+
+  <div class="gt-header">
+    <div class="gt-badge">§2.1 · §2.4</div>
+    <div class="gt-title">Degree Sequence Checker</div>
+    <p class="gt-desc">Enter a degree sequence and test it against the Handshake Lemma and the basic rules for simple graphs. A sequence must pass all checks before a graph with that sequence can exist.</p>
+  </div>
+
+  <div class="gt-label">QUICK EXAMPLES</div>
+  <div class="examples">
+    <button class="ex" onclick="load('3, 2, 2, 1')">3, 2, 2, 1</button>
+    <button class="ex" onclick="load('3, 3, 3, 3')">3, 3, 3, 3</button>
+    <button class="ex" onclick="load('4, 3, 2, 1')">4, 3, 2, 1</button>
+    <button class="ex" onclick="load('2, 2, 2, 2, 2')">2, 2, 2, 2, 2</button>
+    <button class="ex" onclick="load('5, 3, 2, 1')">5, 3, 2, 1 (fails)</button>
+    <button class="ex" onclick="load('3, 2, 1')">3, 2, 1 (fails)</button>
+  </div>
+
+  <div class="gt-label">DEGREE SEQUENCE</div>
+  <div style="margin-bottom:8px;">
+    <textarea class="gt-input" id="seqInput" placeholder="Enter degrees separated by commas or spaces, e.g.   3, 2, 2, 1">3, 2, 2, 1</textarea>
+  </div>
+  <div class="gt-row" style="margin-bottom:16px;">
+    <button class="gt-btn gt-btn-primary" onclick="checkSeq()">Check Sequence</button>
+    <button class="gt-btn" onclick="clearAll()">Clear</button>
+  </div>
+
+  <div id="results" style="display:none;">
+
+    <div class="summary-box" id="summaryBox"></div>
+
+    <div style="margin-top:14px;">
+      <div class="gt-label">CHECKS</div>
+      <div id="checksBox" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:4px 14px;"></div>
+    </div>
+
+    <div class="hh-box" id="hhBox" style="display:none;">
+      <div class="hh-title">Optional: Havel–Hakimi Graphicality Test</div>
+      <div id="hhResult" style="font-size:13px;color:var(--text2);line-height:1.7;"></div>
+    </div>
+
+    <div id="verdict" class="gt-msg" style="margin-top:14px;"></div>
+
+  </div>
+
+</div>
+
+<script src="../shared/graph-algorithms.js"></script>
+<script>
+function load(s) {
+  document.getElementById('seqInput').value = s;
+  checkSeq();
+}
+
+function clearAll() {
+  document.getElementById('seqInput').value = '';
+  document.getElementById('results').style.display = 'none';
+}
+
+function checkSeq() {
+  const raw = document.getElementById('seqInput').value.trim();
+  if (!raw) { clearAll(); return; }
+
+  // Parse
+  const parts = raw.split(/[\s,]+/).filter(Boolean);
+  const seq = parts.map(p => {
+    const n = parseInt(p, 10);
+    return isNaN(n) ? NaN : n;
+  });
+
+  if (seq.some(isNaN)) {
+    showVerdictOnly('Could not parse the input. Enter integers separated by commas or spaces.', 'err');
+    return;
+  }
+
+  seq.sort((a, b) => b - a);
+
+  const res = GraphAlgorithms.checkDegreeSequence(seq);
+
+  document.getElementById('results').style.display = '';
+
+  // Summary
+  const sumEl = document.getElementById('summaryBox');
+  sumEl.innerHTML =
+    `Number of vertices: <span class="hl">${res.n}</span><br>` +
+    `Degree sum: <span class="hl">${res.degSum}</span><br>` +
+    (res.edgeCount !== null
+      ? `Possible number of edges: ${res.degSum} / 2 = <span class="hl">${res.edgeCount}</span><br>`
+      : `Degree sum is odd — cannot compute edges<br>`) +
+    `Odd-degree vertices: <span class="hl">${res.oddCount}</span>`;
+
+  // Checks
+  const checksEl = document.getElementById('checksBox');
+  checksEl.innerHTML = res.results.map(c => `
+    <div class="check-row">
+      <div class="check-icon">${c.ok ? '✅' : '❌'}</div>
+      <div>
+        <div class="check-label">${c.label}</div>
+        <div class="check-detail">${c.detail}</div>
+      </div>
+    </div>`).join('');
+
+  // Havel–Hakimi (only if basic checks pass)
+  const hhBox = document.getElementById('hhBox');
+  if (res.passed) {
+    hhBox.style.display = '';
+    const hh = GraphAlgorithms.havelHakimi(seq);
+    document.getElementById('hhResult').innerHTML = hh.graphical
+      ? `<strong style="color:var(--green)">Graphical</strong> — The Havel–Hakimi algorithm confirms that a simple graph with this degree sequence actually exists.<br><small>Note: passing the Handshake Lemma is necessary but not sufficient; Havel–Hakimi is the definitive test.</small>`
+      : `<strong style="color:var(--red)">Not graphical</strong> — Even though this sequence passes the Handshake Lemma, the Havel–Hakimi algorithm shows no simple graph with this degree sequence can exist.<br><small>This is a rare case — a good example that the Handshake Lemma alone is not enough.</small>`;
+  } else {
+    hhBox.style.display = 'none';
+  }
+
+  // Verdict
+  const verdict = document.getElementById('verdict');
+  if (res.passed) {
+    verdict.className = 'gt-msg gt-msg-ok';
+    verdict.textContent = 'This sequence passes all basic checks. It is a candidate degree sequence for a simple graph.';
+  } else {
+    verdict.className = 'gt-msg gt-msg-err';
+    verdict.textContent = 'This sequence fails one or more checks. No simple graph can have this degree sequence.';
+  }
+}
+
+function showVerdictOnly(msg, type) {
+  document.getElementById('results').style.display = '';
+  document.getElementById('summaryBox').innerHTML = '';
+  document.getElementById('checksBox').innerHTML = '';
+  document.getElementById('hhBox').style.display = 'none';
+  const v = document.getElementById('verdict');
+  v.className = `gt-msg gt-msg-${type}`;
+  v.textContent = msg;
+}
+
+// Run on load with default value
+checkSeq();
+</script>
+</body>
+</html>

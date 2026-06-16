@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Representation Translator — §2.1</title>
+  <link rel="stylesheet" href="../shared/graph-style.css" />
+  <style>
+    body { padding: 1rem; }
+    .top-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 1rem; }
+    @media (max-width: 720px) { .top-row { grid-template-columns: 1fr; } }
+    .gt-canvas-panel svg { height: 360px; background: #fafafa; }
+    .mode-tabs { display: flex; gap: 0; margin-bottom: 10px; border: 1.5px solid var(--border); border-radius: var(--rs); overflow: hidden; }
+    .mode-tab { flex: 1; padding: 7px 10px; border: none; background: var(--bg2); color: var(--text2); font-size: 12px; cursor: pointer; transition: all .15s; border-right: 1px solid var(--border); }
+    .mode-tab:last-child { border-right: none; }
+    .mode-tab.active { background: var(--primary); color: #fff; font-weight: 700; }
+    textarea.gt-input {
+      width: 100%; min-height: 130px; resize: vertical;
+      font-family: var(--mono); font-size: 13px; padding: 10px 12px;
+      border: 1.5px solid var(--border); border-radius: var(--rs);
+      background: var(--bg); color: var(--text); outline: none;
+    }
+    textarea.gt-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--pbg); }
+    .hint-text { font-size: 11px; color: var(--text3); line-height: 1.8; margin: 6px 0 10px; }
+    .hint-text code { font-family: var(--mono); background: var(--bg2); padding: 1px 5px; border-radius: 3px; font-size: 11px; color: var(--text2); }
+    .out-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+    @media (max-width: 680px) { .out-grid { grid-template-columns: 1fr; } }
+    .matrix-wrap pre { font-family: var(--mono); font-size: 11px; color: var(--text2); line-height: 1.6; white-space: pre; overflow-x: auto; }
+    .error-list { list-style: none; padding: 0; }
+    .error-list li { font-size: 12px; padding: 4px 0; color: var(--red); }
+    .error-list li::before { content: '⚠ '; }
+  </style>
+</head>
+<body>
+<div class="gt-page">
+
+  <a class="gt-back" href="../index.html">← Graph Theory Tools</a>
+
+  <div class="gt-header">
+    <div class="gt-badge">§2.1 · §2.6</div>
+    <div class="gt-title">Representation Translator</div>
+    <p class="gt-desc">Enter a graph in any representation and the tool translates it into all the others. A graph is the same structure no matter how it is written down.</p>
+  </div>
+
+  <div class="top-row">
+
+    <!-- Input side -->
+    <div>
+      <div class="gt-label">INPUT FORMAT</div>
+      <div class="mode-tabs">
+        <button class="mode-tab active" id="tab-edge" onclick="setMode('edge')">Edge List</button>
+        <button class="mode-tab" id="tab-adj"  onclick="setMode('adj')">Adj. List</button>
+        <button class="mode-tab" id="tab-mat"  onclick="setMode('mat')">Matrix</button>
+      </div>
+
+      <div id="hint-edge" class="hint-text">
+        One edge per line: <code>A B</code> &nbsp;or&nbsp; <code>A,B</code><br>
+        Vertex labels are any word or letter.
+      </div>
+      <div id="hint-adj" class="hint-text" style="display:none;">
+        Format: <code>A: B, C</code> &nbsp;(vertex then colon then neighbors)<br>
+        List every vertex, even isolated ones with no neighbors.
+      </div>
+      <div id="hint-mat" class="hint-text" style="display:none;">
+        Optional first line: <code>Labels: A B C D</code><br>
+        Then the n × n matrix of 0s and 1s, one row per line.
+      </div>
+
+      <textarea class="gt-input" id="mainInput" spellcheck="false" placeholder="Enter graph here…" oninput="doTranslate()">A B
+A C
+B C
+C D</textarea>
+
+      <div class="gt-row" style="margin-top:8px;">
+        <button class="gt-btn gt-btn-primary" onclick="doTranslate()">Translate</button>
+        <button class="gt-btn" onclick="clearAll()">Clear</button>
+      </div>
+
+      <div id="errBox" style="display:none;margin-top:10px;">
+        <div class="gt-msg gt-msg-err">
+          <ul class="error-list" id="errList"></ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Graph drawing -->
+    <div>
+      <div class="gt-label">GRAPH DRAWING</div>
+      <div class="gt-canvas-panel">
+        <svg id="graphSvg" viewBox="0 0 440 360" xmlns="http://www.w3.org/2000/svg">
+          <text x="220" y="180" text-anchor="middle" fill="#cbd5e1" font-size="13" font-family="ui-monospace,monospace">Enter a graph on the left.</text>
+        </svg>
+      </div>
+      <p style="font-size:11px;color:var(--text3);margin-top:4px;">Drag vertices to rearrange.</p>
+    </div>
+
+  </div>
+
+  <!-- Output representations -->
+  <div id="outputSection" style="display:none;">
+    <hr class="gt-divider" style="margin:14px 0;" />
+    <div class="gt-label">ALL REPRESENTATIONS</div>
+
+    <div class="out-grid">
+
+      <div class="gt-info-box">
+        <div class="gt-label">VERTEX SET &amp; EDGE SET</div>
+        <div class="mono" id="outVE" style="font-size:12px;line-height:2;color:var(--text2);"></div>
+      </div>
+
+      <div class="gt-info-box">
+        <div class="gt-label">DEGREE TABLE</div>
+        <div id="outDegTable"></div>
+      </div>
+
+      <div class="gt-info-box">
+        <div class="gt-label">ADJACENCY LIST</div>
+        <div class="mono" id="outAdjList" style="font-size:12px;line-height:1.9;color:var(--text2);"></div>
+      </div>
+
+      <div class="gt-info-box">
+        <div class="gt-label">ADJACENCY MATRIX</div>
+        <div class="matrix-wrap"><pre id="outAdjMatrix"></pre></div>
+      </div>
+
+    </div>
+
+    <div class="gt-info-box" style="margin-top:10px;">
+      <div class="gt-label">HANDSHAKE LEMMA</div>
+      <div class="gt-handshake" id="outHandshake"></div>
+    </div>
+  </div>
+
+</div>
+
+<script src="../shared/graph-core.js"></script>
+<script src="../shared/graph-renderer.js"></script>
+<script src="../shared/graph-parsers.js"></script>
+
+<script>
+let currentMode = 'edge';
+const graph = new Graph();
+const graphSvg = document.getElementById('graphSvg');
+const renderer = new GraphRenderer(graphSvg, graph, {
+  editable: true,
+  onGraphChange: () => renderer.render()
+});
+
+// Patch render so every internal call (drag, clearSelection, etc.) restores the hint
+const _origRender = renderer.render.bind(renderer);
+renderer.render = () => { _origRender(); showHintIfEmpty(); };
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+function showHintIfEmpty() {
+  // Remove any existing hint
+  const old = graphSvg.querySelector('.svg-hint');
+  if (old) old.remove();
+  if (graph.vertices.length === 0) {
+    const t = document.createElementNS(SVG_NS, 'text');
+    t.setAttribute('class', 'svg-hint');
+    t.setAttribute('x', '220');
+    t.setAttribute('y', '185');
+    t.setAttribute('text-anchor', 'middle');
+    t.setAttribute('fill', '#cbd5e1');
+    t.setAttribute('font-size', '13');
+    t.setAttribute('font-family', 'ui-monospace,monospace');
+    t.textContent = 'Enter a graph on the left.';
+    graphSvg.appendChild(t);
+  }
+}
+
+// Export helpers — produce text for each format from current graph
+function graphToEdgeList(g) {
+  return g.edges.map(e => `${e.source} ${e.target}`).join('\n');
+}
+function graphToAdjList(g) {
+  const adj = g.getAdjacencyList();
+  return g.vertices.map(v => `${v.label}: ${(adj[v.id] || []).join(', ')}`).join('\n');
+}
+function graphToMatrix(g) {
+  if (!g.vertices.length) return '';
+  const { ids, mat } = g.getAdjacencyMatrix();
+  let out = 'Labels: ' + ids.join(' ') + '\n';
+  for (const u of ids) out += ids.map(v => mat[u][v]).join(' ') + '\n';
+  return out.trim();
+}
+
+const PLACEHOLDERS = {
+  edge: 'A B\nA C\nB C\nC D',
+  adj:  'A: B, C\nB: A, C\nC: A, B, D\nD: C',
+  mat:  'Labels: A B C D\n0 1 1 0\n1 0 1 0\n1 1 0 1\n0 0 1 0'
+};
+
+function setMode(m) {
+  currentMode = m;
+  ['edge', 'adj', 'mat'].forEach(t => {
+    document.getElementById('tab-' + t).classList.toggle('active', t === m);
+    document.getElementById('hint-' + t).style.display = t === m ? '' : 'none';
+  });
+  const inp = document.getElementById('mainInput');
+  inp.placeholder = PLACEHOLDERS[m];
+
+  // Populate textarea with current graph in the new format (if graph has vertices)
+  const exportFns = { edge: graphToEdgeList, adj: graphToAdjList, mat: graphToMatrix };
+  const current = graph.vertices.length ? exportFns[m](graph) : '';
+  inp.value = current;
+
+  if (!current) {
+    document.getElementById('outputSection').style.display = 'none';
+  }
+  hideErrors();
+}
+
+function doTranslate() {
+  const text = document.getElementById('mainInput').value;
+  if (!text.trim()) {
+    graph.clear();
+    renderer.render();
+    document.getElementById('outputSection').style.display = 'none';
+    hideErrors();
+    return;
+  }
+
+  let result;
+  if (currentMode === 'edge') result = GraphParsers.parseEdgeList(text);
+  else if (currentMode === 'adj') result = GraphParsers.parseAdjacencyList(text);
+  else result = GraphParsers.parseAdjacencyMatrix(text);
+
+  // Truly fatal: nothing was parsed at all
+  if (!result.ok && result.vertices.length === 0) {
+    showErrors(result.errors);
+    graph.clear();
+    renderer.render();
+    document.getElementById('outputSection').style.display = 'none';
+    return;
+  }
+
+  // Non-fatal warnings (duplicates, undeclared neighbors, etc.)
+  if (result.errors.length) {
+    showErrors(result.errors, true);
+  } else {
+    hideErrors();
+  }
+
+  GraphParsers.applyToGraph(graph, result);
+  renderer.render();
+  fillOutputs();
+  document.getElementById('outputSection').style.display = '';
+}
+
+function fillOutputs() {
+  const V = graph.getVertexSet();
+  const E = graph.getEdgeSet();
+  document.getElementById('outVE').innerHTML =
+    `V = { ${V.join(', ')} }<br>E = { ${E.join(', ')} }`;
+
+  const deg = graph.getDegrees();
+  const rows = graph.vertices.map(v =>
+    `<tr><td>${v.label}</td><td>${deg[v.id]}</td></tr>`
+  ).join('');
+  document.getElementById('outDegTable').innerHTML =
+    `<div class="gt-table-wrap"><table class="gt-table">
+      <thead><tr><th>Vertex</th><th>Degree</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>`;
+
+  const adj = graph.getAdjacencyList();
+  document.getElementById('outAdjList').textContent =
+    graph.vertices.map(v => `${v.label}: ${(adj[v.id] || []).join(', ') || '∅'}`).join('\n');
+
+  const { ids, mat } = graph.getAdjacencyMatrix();
+  const pad = (s, w) => s.toString().padStart(w);
+  const cw = 3;
+  let out = '    ' + ids.map(id => pad(id, cw)).join('') + '\n';
+  for (const u of ids) out += pad(u, 3) + ' ' + ids.map(v => pad(mat[u][v], cw)).join('') + '\n';
+  document.getElementById('outAdjMatrix').textContent = out;
+
+  const hs = graph.getHandshakeInfo();
+  document.getElementById('outHandshake').innerHTML =
+    `Degree sum: ${hs.degreeSum}<br>` +
+    `Number of edges: ${hs.edgeCount}<br>` +
+    `2 × edges: ${hs.twice}<br>` +
+    `${hs.degreeSum} = ${hs.twice} &nbsp;` +
+    (hs.valid ? '<span class="ok">✓ Holds</span>' : '<span class="fail">✗ Error</span>');
+}
+
+function showErrors(errs, warn = false) {
+  const box = document.getElementById('errBox');
+  box.style.display = '';
+  box.firstElementChild.className = `gt-msg gt-msg-${warn ? 'warn' : 'err'}`;
+  document.getElementById('errList').innerHTML = errs.map(e => `<li>${e}</li>`).join('');
+}
+
+function hideErrors() {
+  document.getElementById('errBox').style.display = 'none';
+}
+
+function clearAll() {
+  document.getElementById('mainInput').value = '';
+  graph.clear();
+  renderer.render();
+  document.getElementById('outputSection').style.display = 'none';
+  hideErrors();
+}
+
+// Initial render
+doTranslate();
+</script>
+</body>
+</html>

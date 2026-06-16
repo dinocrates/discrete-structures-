@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Named Graph Builder — §2.1</title>
+  <link rel="stylesheet" href="../shared/graph-style.css" />
+  <style>
+    body { padding: 1rem; }
+    .builder-layout { display: grid; grid-template-columns: 240px 1fr; gap: 14px; align-items: start; margin-top: 1rem; }
+    @media (max-width: 700px) { .builder-layout { grid-template-columns: 1fr; } }
+    .gt-canvas-panel svg { height: 380px; background: #fafafa; }
+    .family-btn { display: block; width: 100%; text-align: left; padding: 9px 14px; border: 1.5px solid var(--border); border-radius: var(--rs); background: var(--bg); color: var(--text); font-size: 13px; cursor: pointer; margin-bottom: 6px; transition: all .15s; }
+    .family-btn:hover { background: var(--pbg); border-color: var(--primary); color: var(--primary); }
+    .family-btn.active { background: var(--pbg); border-color: var(--primary); color: var(--primary); font-weight: 700; }
+    .family-btn span { font-size: 11px; color: var(--text3); display: block; margin-top: 1px; }
+    .n-row { display: flex; gap: 8px; align-items: center; margin: 10px 0; flex-wrap: wrap; }
+    .n-label { font-size: 13px; color: var(--text2); white-space: nowrap; }
+    .n-input { width: 70px; padding: 6px 10px; border: 1.5px solid var(--border); border-radius: var(--rs); font-size: 14px; font-family: var(--mono); outline: none; }
+    .n-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--pbg); }
+    .stats-box { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r); padding: 14px 16px; font-family: var(--mono); font-size: 13px; line-height: 2.1; color: var(--text2); margin-top: 10px; }
+    .stats-box .hl { color: var(--text); font-weight: 700; }
+    .formula-box { background: var(--pbg); border: 1px solid var(--pborder); border-radius: var(--rs); padding: 10px 14px; font-size: 13px; color: var(--primary); font-family: var(--mono); margin-top: 8px; line-height: 1.7; }
+    .adj-toggle { font-size: 11px; color: var(--primary); cursor: pointer; text-decoration: underline; margin-top: 8px; display: inline-block; }
+    .extra-box { margin-top: 8px; display: none; }
+  </style>
+</head>
+<body>
+<div class="gt-page">
+
+  <a class="gt-back" href="../index.html">← Graph Theory Tools</a>
+
+  <div class="gt-header">
+    <div class="gt-badge">§2.1 · §2.3</div>
+    <div class="gt-title">Named Graph Builder</div>
+    <p class="gt-desc">Select a graph family and a size to generate the graph. See the drawing, vertex count, edge count, degree sequence, and the formula that produces them.</p>
+  </div>
+
+  <div class="builder-layout">
+
+    <!-- Left: family selector + size inputs -->
+    <div>
+      <div class="gt-label">GRAPH FAMILY</div>
+      <button class="family-btn active" id="btn-Kn" onclick="setFamily('Kn')">
+        Complete &nbsp;<strong>Kₙ</strong>
+        <span>Every pair of vertices connected</span>
+      </button>
+      <button class="family-btn" id="btn-Pn" onclick="setFamily('Pn')">
+        Path &nbsp;<strong>Pₙ</strong>
+        <span>A single path through n vertices</span>
+      </button>
+      <button class="family-btn" id="btn-Cn" onclick="setFamily('Cn')">
+        Cycle &nbsp;<strong>Cₙ</strong>
+        <span>A single cycle through n vertices</span>
+      </button>
+      <button class="family-btn" id="btn-Kmn" onclick="setFamily('Kmn')">
+        Complete Bipartite &nbsp;<strong>K_{m,n}</strong>
+        <span>Two groups, every cross edge present</span>
+      </button>
+
+      <hr class="gt-divider" style="margin:10px 0;" />
+
+      <div id="inputKn" class="n-row">
+        <span class="n-label">n =</span>
+        <input class="n-input" type="number" id="nKn" value="4" min="1" max="12" oninput="build()">
+      </div>
+      <div id="inputPn" class="n-row" style="display:none;">
+        <span class="n-label">n =</span>
+        <input class="n-input" type="number" id="nPn" value="5" min="1" max="16" oninput="build()">
+      </div>
+      <div id="inputCn" class="n-row" style="display:none;">
+        <span class="n-label">n =</span>
+        <input class="n-input" type="number" id="nCn" value="5" min="3" max="16" oninput="build()">
+      </div>
+      <div id="inputKmn" style="display:none;">
+        <div class="n-row">
+          <span class="n-label">m =</span>
+          <input class="n-input" type="number" id="nKm" value="2" min="1" max="8" oninput="build()">
+        </div>
+        <div class="n-row">
+          <span class="n-label">n =</span>
+          <input class="n-input" type="number" id="nKn2" value="3" min="1" max="8" oninput="build()">
+        </div>
+      </div>
+
+      <div class="stats-box" id="statsBox">—</div>
+      <div class="formula-box" id="formulaBox" style="display:none;"></div>
+
+      <span class="adj-toggle" onclick="toggleExtra()">Show adjacency list / matrix</span>
+      <div class="extra-box" id="extraBox">
+        <div class="gt-info-box" style="margin-bottom:8px;">
+          <div class="gt-label">ADJACENCY LIST</div>
+          <div class="mono" id="outAdjList" style="font-size:12px;color:var(--text2);line-height:1.9;"></div>
+        </div>
+        <div class="gt-info-box">
+          <div class="gt-label">ADJACENCY MATRIX</div>
+          <pre id="outAdjMatrix" style="font-size:11px;color:var(--text2);line-height:1.6;white-space:pre;"></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: SVG canvas -->
+    <div class="gt-canvas-panel">
+      <svg id="graphSvg" viewBox="0 0 520 380" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+
+  </div>
+
+</div>
+
+<script src="../shared/graph-core.js"></script>
+<script src="../shared/graph-renderer.js"></script>
+<script src="../shared/graph-algorithms.js"></script>
+
+<script>
+let currentFamily = 'Kn';
+const graph = new Graph();
+const svg = document.getElementById('graphSvg');
+const renderer = new GraphRenderer(svg, graph, { editable: true, onGraphChange: () => renderer.render() });
+
+function setFamily(f) {
+  currentFamily = f;
+  ['Kn','Pn','Cn','Kmn'].forEach(fam => {
+    document.getElementById('btn-' + fam).classList.toggle('active', fam === f);
+    document.getElementById('input' + fam).style.display = fam === f ? '' : 'none';
+  });
+  build();
+}
+
+function build() {
+  let data, stats, formula;
+  if (currentFamily === 'Kn') {
+    const n = clamp(parseInt(document.getElementById('nKn').value) || 4, 1, 12);
+    data = GraphAlgorithms.generateKn(n);
+    const edges = n * (n - 1) / 2;
+    stats = `Vertices: ${n}\nEdges: ${edges}\nEach vertex degree: ${n - 1}\nDegree sequence: ${Array(n).fill(n - 1).join(', ')}`;
+    formula = `Edges = n(n − 1) / 2 = ${n}(${n − 1}) / 2 = ${edges}`;
+  } else if (currentFamily === 'Pn') {
+    const n = clamp(parseInt(document.getElementById('nPn').value) || 5, 1, 16);
+    data = GraphAlgorithms.generatePn(n);
+    const edges = Math.max(n - 1, 0);
+    const seq = n <= 1 ? [0] : [1, 1, ...Array(Math.max(n - 2, 0)).fill(2)].sort((a,b)=>b-a);
+    stats = `Vertices: ${n}\nEdges: ${edges}\nDegree sequence: ${seq.join(', ')}`;
+    formula = `Edges = n − 1 = ${n} − 1 = ${edges}`;
+  } else if (currentFamily === 'Cn') {
+    const n = clamp(parseInt(document.getElementById('nCn').value) || 5, 3, 16);
+    data = GraphAlgorithms.generateCn(n);
+    stats = `Vertices: ${n}\nEdges: ${n}\nEach vertex degree: 2\nDegree sequence: ${Array(n).fill(2).join(', ')}`;
+    formula = `Edges = n = ${n}`;
+  } else {
+    const m = clamp(parseInt(document.getElementById('nKm').value) || 2, 1, 8);
+    const n = clamp(parseInt(document.getElementById('nKn2').value) || 3, 1, 8);
+    data = GraphAlgorithms.generateKmn(m, n);
+    const edges = m * n;
+    const seqA = Array(m).fill(n);
+    const seqB = Array(n).fill(m);
+    const seq = [...seqA, ...seqB].sort((a,b)=>b-a);
+    stats = `Vertices: ${m + n}  (Group A: ${m}, Group B: ${n})\nEdges: ${edges}\nGroup A degree: ${n}  (each connects to all ${n} in B)\nGroup B degree: ${m}  (each connects to all ${m} in A)\nDegree sequence: ${seq.join(', ')}`;
+    formula = `Edges = m × n = ${m} × ${n} = ${edges}`;
+  }
+
+  // Load into graph
+  graph.clear();
+  graph.vertices = data.vertices.map(v => ({...v}));
+  graph.edges = data.edges.map(e => ({...e}));
+  graph._nextIdx = graph.vertices.length;
+  graph._nextEdgeIdx = graph.edges.length;
+
+  renderer.render();
+
+  document.getElementById('statsBox').innerHTML = stats.replace(/\n/g, '<br>').replace(/(\d+)/g, '<span class="hl">$1</span>');
+  const fb = document.getElementById('formulaBox');
+  fb.textContent = formula;
+  fb.style.display = '';
+
+  // Adj list + matrix
+  const adj = graph.getAdjacencyList();
+  document.getElementById('outAdjList').textContent =
+    graph.vertices.map(v => `${v.label}: ${(adj[v.id]||[]).join(', ')||'∅'}`).join('\n');
+
+  const { ids, mat } = graph.getAdjacencyMatrix();
+  if (ids.length <= 12) {
+    const pad = (s, w) => s.toString().padStart(w);
+    const cw = 3;
+    let out = '    ' + ids.map(id => pad(id, cw)).join('') + '\n';
+    for (const u of ids) out += pad(u, 3) + ' ' + ids.map(v => pad(mat[u][v], cw)).join('') + '\n';
+    document.getElementById('outAdjMatrix').textContent = out;
+  } else {
+    document.getElementById('outAdjMatrix').textContent = '(matrix too large to display)';
+  }
+}
+
+function toggleExtra() {
+  const b = document.getElementById('extraBox');
+  b.style.display = b.style.display === '' ? 'none' : '';
+}
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+// Subscript helper already used inline
+build();
+</script>
+</body>
+</html>

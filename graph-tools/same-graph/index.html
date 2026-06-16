@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Same Graph or Different? — §2.1</title>
+  <link rel="stylesheet" href="../shared/graph-style.css" />
+  <style>
+    body { padding: 1rem; }
+    .dual-canvas { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: .75rem; }
+    @media (max-width: 680px) { .dual-canvas { grid-template-columns: 1fr; } }
+    .canvas-wrap { }
+    .canvas-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--text3); margin-bottom: 5px; }
+    .gt-canvas-panel svg { height: 300px; background: #fafafa; }
+    .answer-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 6px; }
+    .ans-btn { flex: 1; min-width: 150px; padding: 10px 14px; border: 1.5px solid var(--border); border-radius: var(--rs); background: var(--bg2); color: var(--text); font-size: 13px; cursor: pointer; transition: all .15s; text-align: center; }
+    .ans-btn:hover { border-color: var(--primary); background: var(--pbg); color: var(--primary); }
+    .ans-btn.selected { border-color: var(--primary); background: var(--primary); color: #fff; font-weight: 700; }
+    .quiz-section { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r); padding: 14px 16px; margin-top: 12px; }
+    .question-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text3); margin-bottom: 8px; }
+    .question-nav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+    .qbtn { padding: 5px 12px; border: 1.5px solid var(--border); border-radius: 99px; background: var(--bg); color: var(--text2); font-size: 12px; cursor: pointer; transition: all .12s; }
+    .qbtn:hover { background: var(--bg3); }
+    .qbtn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .mapping-section { margin-top: 12px; }
+    .mapping-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .mapping-input { font-family: var(--mono); font-size: 13px; padding: 6px 10px; border: 1.5px solid var(--border); border-radius: var(--rs); outline: none; background: var(--bg); color: var(--text); width: 280px; }
+    .mapping-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--pbg); }
+    .mapping-hint { font-size: 11px; color: var(--text3); line-height: 1.8; margin: 4px 0 8px; }
+  </style>
+</head>
+<body>
+<div class="gt-page">
+
+  <a class="gt-back" href="../index.html">← Graph Theory Tools</a>
+
+  <div class="gt-header">
+    <div class="gt-badge">§2.1</div>
+    <div class="gt-title">Same Graph or Different?</div>
+    <p class="gt-desc">A graph is not a drawing. It is a relationship pattern. Two different drawings can represent exactly the same graph. Drag vertices to rearrange and decide whether these two graphs are the same.</p>
+  </div>
+
+  <!-- Question selector -->
+  <div class="quiz-section">
+    <div class="question-title">CHOOSE A QUESTION</div>
+    <div class="question-nav" id="questionNav"></div>
+    <div id="questionDesc" style="font-size:13px;color:var(--text2);line-height:1.7;"></div>
+  </div>
+
+  <!-- Dual canvas -->
+  <div class="dual-canvas" style="margin-top:12px;">
+    <div class="canvas-wrap">
+      <div class="canvas-label">Graph 1</div>
+      <div class="gt-canvas-panel">
+        <svg id="svg1" viewBox="0 0 320 300" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+    </div>
+    <div class="canvas-wrap">
+      <div class="canvas-label">Graph 2</div>
+      <div class="gt-canvas-panel">
+        <svg id="svg2" viewBox="0 0 320 300" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+    </div>
+  </div>
+  <p style="font-size:11px;color:var(--text3);margin-top:4px;">Drag vertices to rearrange either graph.</p>
+
+  <!-- Answer buttons -->
+  <div>
+    <div class="gt-label" style="margin-top:12px;">YOUR ANSWER</div>
+    <div class="answer-row">
+      <button class="ans-btn" id="ans0" onclick="selectAnswer(0)">Same graph<br><small style="font-weight:400;font-size:11px;">Same vertices and edges</small></button>
+      <button class="ans-btn" id="ans1" onclick="selectAnswer(1)">Isomorphic<br><small style="font-weight:400;font-size:11px;">Same structure, different labels</small></button>
+      <button class="ans-btn" id="ans2" onclick="selectAnswer(2)">Different graphs<br><small style="font-weight:400;font-size:11px;">Different structure</small></button>
+    </div>
+    <div class="gt-row">
+      <button class="gt-btn gt-btn-primary" onclick="checkAnswer()">Check Answer</button>
+      <button class="gt-btn" onclick="clearAnswer()">Clear Answer</button>
+    </div>
+  </div>
+
+  <div id="feedback" style="display:none;margin-top:12px;"></div>
+
+  <!-- Optional mapping checker -->
+  <div class="mapping-section">
+    <div class="gt-label">OPTIONAL: VERTEX MAPPING CHECKER</div>
+    <p class="mapping-hint">
+      Enter a vertex mapping to test whether it is a valid isomorphism.<br>
+      Format: <code style="font-family:monospace;background:var(--bg2);padding:1px 5px;border-radius:3px;font-size:11px;">A→X, B→Y, C→Z</code> &nbsp;or&nbsp; <code style="font-family:monospace;background:var(--bg2);padding:1px 5px;border-radius:3px;font-size:11px;">A=X B=Y C=Z</code>
+    </p>
+    <div class="mapping-row">
+      <input class="mapping-input" id="mappingInput" placeholder="A→X, B→Y, C→Z" spellcheck="false">
+      <button class="gt-btn gt-btn-primary" onclick="checkMapping()">Check Mapping</button>
+    </div>
+    <div id="mappingResult" style="margin-top:8px;display:none;"></div>
+  </div>
+
+</div>
+
+<script src="../shared/graph-core.js"></script>
+<script src="../shared/graph-renderer.js"></script>
+<script src="../shared/graph-algorithms.js"></script>
+
+<script>
+// 0 = same, 1 = isomorphic, 2 = different
+const QUESTIONS = [
+  {
+    title: 'Q1: Triangle vs Triangle',
+    desc: 'Both graphs show three vertices and three edges forming a triangle. Vertex labels differ.',
+    answer: 1,
+    explanation: 'These graphs are isomorphic. Both are triangles (K₃) — three vertices each with degree 2, connected in a cycle. The labels differ (A,B,C vs X,Y,Z) but the structure is identical.',
+    g1: { vertices: [{id:'A',label:'A',x:160,y:60},{id:'B',label:'B',x:60,y:240},{id:'C',label:'C',x:260,y:240}], edges: [{id:'e0',source:'A',target:'B'},{id:'e1',source:'B',target:'C'},{id:'e2',source:'A',target:'C'}] },
+    g2: { vertices: [{id:'X',label:'X',x:160,y:240},{id:'Y',label:'Y',x:60,y:60},{id:'Z',label:'Z',x:260,y:60}],  edges: [{id:'e0',source:'X',target:'Y'},{id:'e1',source:'Y',target:'Z'},{id:'e2',source:'X',target:'Z'}] }
+  },
+  {
+    title: 'Q2: Triangle vs Path',
+    desc: 'One graph is a triangle. The other is a path through three vertices. Are these the same structure?',
+    answer: 2,
+    explanation: 'These are different graphs. The triangle has degree sequence 2, 2, 2 — every vertex has exactly 2 neighbors. The path has degree sequence 2, 1, 1 — the endpoints have degree 1. Different degree sequences means the graphs cannot be isomorphic.',
+    g1: { vertices: [{id:'A',label:'A',x:160,y:60},{id:'B',label:'B',x:60,y:240},{id:'C',label:'C',x:260,y:240}], edges: [{id:'e0',source:'A',target:'B'},{id:'e1',source:'B',target:'C'},{id:'e2',source:'A',target:'C'}] },
+    g2: { vertices: [{id:'X',label:'X',x:60,y:150},{id:'Y',label:'Y',x:160,y:150},{id:'Z',label:'Z',x:260,y:150}], edges: [{id:'e0',source:'X',target:'Y'},{id:'e1',source:'Y',target:'Z'}] }
+  },
+  {
+    title: 'Q3: Square vs Diamond',
+    desc: 'One graph draws a square. The other draws the same four vertices differently. Look at which pairs are connected.',
+    answer: 1,
+    explanation: 'These graphs are isomorphic. Both have 4 vertices and 4 edges forming a 4-cycle (C₄). The degree sequence in both is 2, 2, 2, 2. The drawings look different but the connection pattern is the same.',
+    g1: { vertices: [{id:'A',label:'A',x:80,y:80},{id:'B',label:'B',x:240,y:80},{id:'C',label:'C',x:240,y:240},{id:'D',label:'D',x:80,y:240}], edges: [{id:'e0',source:'A',target:'B'},{id:'e1',source:'B',target:'C'},{id:'e2',source:'C',target:'D'},{id:'e3',source:'D',target:'A'}] },
+    g2: { vertices: [{id:'W',label:'W',x:160,y:60},{id:'X',label:'X',x:280,y:160},{id:'Y',label:'Y',x:160,y:260},{id:'Z',label:'Z',x:40,y:160}], edges: [{id:'e0',source:'W',target:'X'},{id:'e1',source:'X',target:'Y'},{id:'e2',source:'Y',target:'Z'},{id:'e3',source:'Z',target:'W'}] }
+  },
+  {
+    title: 'Q4: K₄ vs C₄ + diagonal',
+    desc: 'One graph is K₄ (every pair connected). The other is a cycle with one diagonal. Different structures?',
+    answer: 2,
+    explanation: 'These are different graphs. K₄ has 6 edges and degree sequence 3, 3, 3, 3. The cycle with one diagonal has 5 edges and degree sequence 3, 3, 2, 2. Different edge counts confirm they cannot be isomorphic.',
+    g1: { vertices: [{id:'A',label:'A',x:160,y:50},{id:'B',label:'B',x:50,y:230},{id:'C',label:'C',x:270,y:230},{id:'D',label:'D',x:160,y:155}], edges: [{id:'e0',source:'A',target:'B'},{id:'e1',source:'A',target:'C'},{id:'e2',source:'A',target:'D'},{id:'e3',source:'B',target:'C'},{id:'e4',source:'B',target:'D'},{id:'e5',source:'C',target:'D'}] },
+    g2: { vertices: [{id:'P',label:'P',x:80,y:80},{id:'Q',label:'Q',x:240,y:80},{id:'R',label:'R',x:240,y:240},{id:'S',label:'S',x:80,y:240}], edges: [{id:'e0',source:'P',target:'Q'},{id:'e1',source:'Q',target:'R'},{id:'e2',source:'R',target:'S'},{id:'e3',source:'S',target:'P'},{id:'e4',source:'P',target:'R'}] }
+  },
+  {
+    title: 'Q5: Rotated C₅',
+    desc: 'Both graphs have 5 vertices and 5 edges. One is drawn as a regular pentagon. The other has the same edges, just rearranged on the page.',
+    answer: 0,
+    explanation: 'These are the same graph. The vertex labels and edges are identical — only the positions on the page differ. Dragging vertices changes the drawing but not the graph. A graph is its edge set, not its picture.',
+    g1: { vertices: [{id:'A',label:'A',x:160,y:40},{id:'B',label:'B',x:290,y:130},{id:'C',label:'C',x:240,y:270},{id:'D',label:'D',x:80,y:270},{id:'E',label:'E',x:30,y:130}], edges: [{id:'e0',source:'A',target:'B'},{id:'e1',source:'B',target:'C'},{id:'e2',source:'C',target:'D'},{id:'e3',source:'D',target:'E'},{id:'e4',source:'E',target:'A'}] },
+    g2: { vertices: [{id:'A',label:'A',x:160,y:270},{id:'B',label:'B',x:30,y:180},{id:'C',label:'C',x:80,y:40},{id:'D',label:'D',x:240,y:40},{id:'E',label:'E',x:290,y:180}], edges: [{id:'e0',source:'A',target:'B'},{id:'e1',source:'B',target:'C'},{id:'e2',source:'C',target:'D'},{id:'e3',source:'D',target:'E'},{id:'e4',source:'E',target:'A'}] }
+  }
+];
+
+let currentQ = 0;
+let selectedAnswer = null;
+const g1 = new Graph(), g2 = new Graph();
+const r1 = new GraphRenderer(document.getElementById('svg1'), g1, { editable: true, onGraphChange: () => r1.render() });
+const r2 = new GraphRenderer(document.getElementById('svg2'), g2, { editable: true, onGraphChange: () => r2.render() });
+
+function buildQuestionNav() {
+  const nav = document.getElementById('questionNav');
+  nav.innerHTML = QUESTIONS.map((q, i) =>
+    `<button class="qbtn ${i === 0 ? 'active' : ''}" id="qbtn${i}" onclick="loadQuestion(${i})">Q${i+1}</button>`
+  ).join('');
+}
+
+function loadQuestion(idx) {
+  currentQ = idx;
+  QUESTIONS.forEach((_, i) => document.getElementById('qbtn' + i).classList.toggle('active', i === idx));
+  document.getElementById('questionDesc').textContent = QUESTIONS[idx].desc;
+  clearAnswer();
+  document.getElementById('mappingInput').value = '';
+  document.getElementById('mappingResult').style.display = 'none';
+
+  const q = QUESTIONS[idx];
+  loadGraphData(g1, q.g1); r1.render();
+  loadGraphData(g2, q.g2); r2.render();
+}
+
+function loadGraphData(graph, data) {
+  graph.vertices = data.vertices.map(v => ({...v}));
+  graph.edges = data.edges.map(e => ({...e}));
+  graph._nextIdx = graph.vertices.length;
+  graph._nextEdgeIdx = graph.edges.length;
+}
+
+function selectAnswer(n) {
+  selectedAnswer = n;
+  [0,1,2].forEach(i => document.getElementById('ans'+i).classList.toggle('selected', i===n));
+}
+
+function clearAnswer() {
+  selectedAnswer = null;
+  [0,1,2].forEach(i => document.getElementById('ans'+i).classList.remove('selected'));
+  document.getElementById('feedback').style.display = 'none';
+}
+
+function checkAnswer() {
+  if (selectedAnswer === null) {
+    showFeedback('Select an answer first.', 'warn'); return;
+  }
+  const q = QUESTIONS[currentQ];
+  if (selectedAnswer === q.answer) {
+    showFeedback('✅ Correct!\n\n' + q.explanation, 'ok');
+  } else {
+    const labels = ['Same graph', 'Isomorphic (same structure, different labels)', 'Different graphs'];
+    showFeedback(`❌ Not quite. The correct answer is: ${labels[q.answer]}.\n\n${q.explanation}`, 'err');
+  }
+}
+
+function showFeedback(text, type) {
+  const fb = document.getElementById('feedback');
+  fb.style.display = '';
+  fb.className = `gt-msg gt-msg-${type}`;
+  fb.style.whiteSpace = 'pre-wrap';
+  fb.textContent = text;
+}
+
+function checkMapping() {
+  const raw = document.getElementById('mappingInput').value.trim();
+  if (!raw) return;
+  const mapping = {};
+  const pairs = raw.split(/[,\s]+/).filter(Boolean);
+  for (const pair of pairs) {
+    const m = pair.match(/^([A-Za-z0-9]+)\s*[→=\->\>]+\s*([A-Za-z0-9]+)$/);
+    if (!m) {
+      showMappingResult(`Could not parse "${pair}". Use format A→X or A=X.`, 'err'); return;
+    }
+    mapping[m[1]] = m[2];
+  }
+  const result = GraphAlgorithms.checkMapping(g1, g2, mapping);
+  showMappingResult(result.reason, result.ok ? 'ok' : 'err');
+}
+
+function showMappingResult(text, type) {
+  const el = document.getElementById('mappingResult');
+  el.style.display = '';
+  el.className = `gt-msg gt-msg-${type}`;
+  el.textContent = text;
+}
+
+buildQuestionNav();
+loadQuestion(0);
+</script>
+</body>
+</html>
