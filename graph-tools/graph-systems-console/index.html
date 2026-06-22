@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Graph Systems Console</title>
+  <link rel="stylesheet" href="../shared/graph-style.css" />
+  <style>
+    :root { --course-red:#b42318; --route:#344054; }
+    body { padding:1rem; min-width:320px; font-size:16px; }
+    .gt-page { max-width:1180px; padding-bottom:2rem; }
+    .gt-header { display:grid; grid-template-columns:1fr auto; gap:14px; align-items:end; }
+    .gt-title { font-size:clamp(21px,3vw,28px); }
+    .scenario { color:var(--text2); line-height:1.55; max-width:800px; }
+    .scenario strong { color:var(--course-red); }
+    .legend { display:flex; flex-wrap:wrap; gap:6px 12px; font-size:12px; color:var(--text2); }
+    .legend span { white-space:nowrap; }
+    .status-strip { display:grid; grid-template-columns:repeat(4,1fr); margin:15px 0; border-block:1px solid var(--border); background:var(--bg2); }
+    .metric { text-align:center; padding:9px 4px; border-right:1px solid var(--border); }
+    .metric:last-child { border:0; }
+    .metric-label { display:block; font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:.05em; }
+    .metric-value { display:block; min-width:3ch; font-weight:800; font-size:18px; }
+    .top-grid { display:grid; grid-template-columns:minmax(0,58fr) minmax(320px,42fr); gap:16px; align-items:start; }
+    .map-section { min-width:0; }
+    .map-wrap { overflow:hidden; border:1.5px solid #cbd5e1; border-radius:9px; background-color:#f8fafc; background-image:linear-gradient(#e9eef2 1px,transparent 1px),linear-gradient(90deg,#e9eef2 1px,transparent 1px); background-size:30px 30px; }
+    #map { display:block; width:100%; height:auto; touch-action:manipulation; }
+    .route-line { stroke:var(--route); stroke-width:9; stroke-linecap:round; transition:stroke .18s,opacity .18s; }
+    .route.disabled .route-line { stroke:#98a2b3; stroke-width:7; stroke-dasharray:15 12; opacity:.7; }
+    .route-hit { stroke:transparent; stroke-width:44; cursor:pointer; }
+    .route:focus { outline:none; }
+    .route:focus .route-line,.route.hovered .route-line { stroke:#b54708; stroke-width:14; filter:drop-shadow(0 0 4px #fff); }
+    .route.incident .route-line { stroke:#b54708; }
+    .vertex { cursor:pointer; }
+    .vertex circle { fill:#fff; stroke:var(--vertex-color); stroke-width:6; }
+    .vertex.courtyard circle { stroke-width:9; }
+    .vertex .component-ring { fill:none; stroke:#475467; stroke-width:0; stroke-dasharray:8 5; }
+    .map-wrap.disconnected .vertex .component-ring { stroke-width:3; }
+    .map-wrap.disconnected .vertex.component-1 .component-ring { stroke-dasharray:3 5; }
+    .map-wrap.disconnected .vertex.component-2 .component-ring { stroke-dasharray:12 4 3 4; }
+    .vertex.selected circle:not(.component-ring) { stroke-width:12; filter:drop-shadow(0 0 5px #667085); }
+    .vertex:focus { outline:none; }
+    .vertex:focus circle:not(.component-ring) { stroke:#101828; stroke-width:11; stroke-dasharray:6 4; }
+    .vertex text { text-anchor:middle; pointer-events:none; font-family:var(--sans); font-size:20px; font-weight:800; fill:#101828; paint-order:stroke; stroke:#fff; stroke-width:5px; }
+    .vertex .symbol { font-size:15px; fill:var(--vertex-color); }
+    .controls { display:flex; gap:8px; flex-wrap:wrap; padding-top:9px; }
+    .control { min-height:44px; padding:8px 14px; border:1.5px solid #98a2b3; border-radius:6px; background:#fff; color:#101828; font:600 14px var(--sans); cursor:pointer; }
+    .control:hover:not(:disabled) { background:#f2f4f7; }
+    .control:focus-visible,summary:focus-visible { outline:3px solid #84caff; outline-offset:2px; }
+    .control:disabled { opacity:.45; cursor:not-allowed; }
+    .selection-summary,.components-summary { margin-top:8px; padding:8px 10px; border-left:4px solid #667085; background:#f8fafc; color:#344054; font-size:13px; min-height:40px; }
+    .components-summary { border-color:var(--course-red); display:none; }
+    .components-summary.show { display:block; }
+    .side-band { border-left:4px solid var(--course-red); padding-left:15px; }
+    .band + .band { border-top:1px solid var(--border); margin-top:14px; padding-top:13px; }
+    .band h2,.representation h2,.investigations h2 { font-size:15px; text-transform:uppercase; letter-spacing:.06em; color:#344054; margin-bottom:8px; }
+    .edge-set { font:13px/1.65 var(--mono); }
+    .edge-entry { display:block; padding-left:18px; }
+    .edge-entry.incident,.degree-row.selected,.list-row.selected { background:#fff4ed; box-shadow:inset 3px 0 #b54708; font-weight:700; }
+    .affected { animation:affectedPulse .22s ease-out; }
+    @keyframes affectedPulse { from { background:#fef0c7; box-shadow:inset 0 0 0 2px #f79009; } to { background:transparent; box-shadow:none; } }
+    .set-count { margin-top:5px; font-weight:800; }
+    .degree-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:3px 8px; font:13px/1.7 var(--mono); }
+    .degree-row { padding:2px 5px; border-left:4px solid var(--vertex-color); }
+    .sequence { margin-top:8px; font:700 14px var(--mono); }
+    .handshake { font:13px/1.75 var(--mono); background:#f8fafc; padding:9px 10px; }
+    .verified { color:#067647; font-weight:800; }
+    .note { font-size:12px; line-height:1.55; color:var(--text2); margin-top:6px; }
+    .representations { display:grid; grid-template-columns:minmax(0,1fr) minmax(390px,1.2fr); gap:16px; margin-top:18px; padding-top:15px; border-top:2px solid var(--border); }
+    .representation { min-width:0; }
+    .list-row { display:grid; grid-template-columns:110px 1fr; padding:6px 7px; border-bottom:1px solid var(--border); font-size:13px; }
+    .list-name { font-weight:800; border-left:4px solid var(--vertex-color); padding-left:6px; }
+    .neighbor.selected-neighbor { background:#fff4ed; color:#93370d; font-weight:700; }
+    .matrix-wrap { overflow-x:auto; }
+    .matrix { border-collapse:collapse; min-width:390px; width:100%; text-align:center; font:14px var(--mono); }
+    .matrix th,.matrix td { min-width:45px; height:42px; border:1px solid #d0d5dd; }
+    .matrix th { background:#f2f4f7; font-weight:800; }
+    .matrix th.vertex-head { border-top:4px solid var(--vertex-color); }
+    .matrix th.row-head { border-left:4px solid var(--vertex-color); }
+    .matrix td.one { background:#eaf2ff; font-weight:900; box-shadow:inset 0 0 0 1px #84adff; }
+    .matrix td.zero { color:#667085; }
+    .matrix .selected-axis { background:#fff4ed; box-shadow:inset 0 0 0 2px #f79009; }
+    .matrix td.edge-trace { background:#fef0c7; box-shadow:inset 0 0 0 3px #dc6803; }
+    .investigations { margin-top:18px; padding-top:15px; border-top:2px solid var(--border); }
+    .prompt-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+    details { border:1px solid var(--border); border-radius:7px; padding:8px 11px; }
+    summary { cursor:pointer; min-height:44px; padding:8px 2px; font-weight:750; font-size:14px; }
+    details p { font-size:13px; color:var(--text2); padding:5px 2px; }
+    .observation { border-top:1px solid var(--border); }
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+    @media (max-width:760px) {
+      body { padding:.5rem; }
+      .gt-page { padding:.5rem; }
+      .gt-header { grid-template-columns:1fr; }
+      .top-grid,.representations,.prompt-grid { grid-template-columns:1fr; }
+      .side-band { border-left:0; border-top:4px solid var(--course-red); padding:12px 0 0; }
+      .map-section { order:-1; }
+      .degree-grid { grid-template-columns:1fr; }
+      .representations { margin-top:14px; }
+      .matrix th,.matrix td { min-width:48px; height:44px; }
+    }
+    @media (max-width:370px) { .metric-label { font-size:9px; } .metric-value { font-size:16px; } .list-row { grid-template-columns:90px 1fr; } }
+    @media (prefers-reduced-motion:reduce) { *,*::before,*::after { transition:none!important; animation:none!important; scroll-behavior:auto!important; } }
+  </style>
+</head>
+<body>
+<main class="gt-page">
+  <a class="gt-back" href="../index.html">← Graph Theory Tools</a>
+  <header class="gt-header">
+    <div>
+      <div class="gt-badge">§2.1 · REPRESENTATIONS</div>
+      <h1 class="gt-title">Graph Systems Console</h1>
+      <p class="scenario"><strong>Systems Console: Inspect the Level Graph.</strong> The game engine stores the same level in several ways. Enable and disable routes on the map, then watch every representation update together.</p>
+    </div>
+    <div class="legend" aria-label="Legend"><span>● Room = Vertex</span><span>━ Route = Edge</span><span>┄ Dashed = Disabled</span></div>
+  </header>
+
+  <section class="status-strip" aria-label="Graph status">
+    <div class="metric"><span class="metric-label">Vertices</span><span class="metric-value">5</span></div>
+    <div class="metric"><span class="metric-label">Active Routes</span><span class="metric-value" id="edgeMetric">6</span></div>
+    <div class="metric"><span class="metric-label">Connected</span><span class="metric-value" id="connectedMetric">Yes</span></div>
+    <div class="metric"><span class="metric-label">Components</span><span class="metric-value" id="componentMetric">1</span></div>
+  </section>
+
+  <section class="top-grid">
+    <div class="map-section" id="mapSection">
+      <div class="map-wrap" id="mapWrap">
+        <svg id="map" viewBox="40 100 920 480" role="img" aria-labelledby="mapTitle mapDesc">
+          <title id="mapTitle">Interactive five-room game level graph</title>
+          <desc id="mapDesc">Five selectable room vertices and six toggleable undirected routes arranged as two triangles sharing Courtyard.</desc>
+          <g id="edgeLayer"></g><g id="vertexLayer"></g>
+        </svg>
+      </div>
+      <div class="controls" aria-label="Console controls">
+        <button class="control" id="undoButton" type="button" disabled>↶ Undo</button>
+        <button class="control" id="resetButton" type="button">↺ Reset</button>
+        <button class="control" id="clearButton" type="button" disabled>× Clear selection</button>
+      </div>
+      <div class="selection-summary" id="selectionSummary">Select a room to trace it across every representation.</div>
+      <div class="components-summary" id="componentsSummary"></div>
+    </div>
+
+    <aside class="side-band">
+      <section class="band" id="edgeSetSection"><h2>Active edge set</h2><div class="edge-set" id="edgeSet"></div><div class="set-count" id="setCount"></div></section>
+      <section class="band" id="degreesSection"><h2>Degrees</h2><div class="degree-grid" id="degreeGrid"></div><div class="sequence" id="degreeSequence"></div></section>
+      <section class="band"><h2>Σ d(v) = 2|E|</h2><div class="handshake" id="handshake"></div><p class="note">Every edge contributes 1 to the degree of each endpoint, so every edge is counted twice.</p></section>
+    </aside>
+  </section>
+
+  <section class="representations">
+    <div class="representation" id="listSection"><h2>Adjacency list</h2><div id="adjacencyList"></div><p class="note">Each undirected edge appears in two adjacency-list entries.</p></div>
+    <div class="representation" id="matrixSection"><h2>Adjacency matrix</h2><div class="matrix-wrap"><table class="matrix" id="matrix"><caption class="sr-only">Adjacency matrix in Spawn, Armory, Courtyard, Tower, Boss order</caption></table></div><p class="note">Undirected graph: the matrix is symmetric.</p></div>
+  </section>
+
+  <section class="investigations"><h2>Guided investigations</h2><div class="prompt-grid">
+    <details><summary>1. Matrix Mirror</summary><p>Disable the Spawn–Courtyard route. How many matrix cells change?</p><p class="observation"><strong>Observation:</strong> Two cells change: [Spawn, Courtyard] and [Courtyard, Spawn]. An undirected edge is represented symmetrically.</p></details>
+    <details><summary>2. Isolate Spawn</summary><p>Disable both routes incident with Spawn. What happens to its degree and the connected-component count?</p><p class="observation"><strong>Observation:</strong> d(Spawn) becomes 0. The graph becomes disconnected and contains two components.</p></details>
+    <details><summary>3. Minimal Connected Map</summary><p>Can you keep all five rooms connected using only four routes?</p><p class="observation" id="minimalObservation"><strong>Observation:</strong> Try a connected configuration with four active routes.</p></details>
+  </div></section>
+  <div class="sr-only" id="liveRegion" aria-live="polite" aria-atomic="true"></div>
+</main>
+
+<script src="graph-model.js"></script>
+<script>
+(function () {
+  'use strict';
+  const { VERTICES, EDGES, derive, createState } = GraphSystemsModel;
+  const state = createState();
+  const labels = new Map(VERTICES.map(vertex => [vertex.id, vertex.label]));
+  const indexes = new Map(VERTICES.map((vertex,index) => [vertex.id,index]));
+  let selectedVertexId = null;
+  let focusedEdgeId = null;
+  let lastToggledEdgeId = null;
+  const edgeLayer = document.getElementById('edgeLayer');
+  const vertexLayer = document.getElementById('vertexLayer');
+
+  function svg(tag, attrs) {
+    const element = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    for (const [key,value] of Object.entries(attrs || {})) element.setAttribute(key,value);
+    return element;
+  }
+  function edgeName(edge) { return `${labels.get(edge.from)} to ${labels.get(edge.to)}`; }
+
+  function buildMap() {
+    for (const edge of EDGES) {
+      const from = VERTICES[indexes.get(edge.from)], to = VERTICES[indexes.get(edge.to)];
+      const group = svg('g',{ class:'route', tabindex:'0', role:'button', 'data-edge-id':edge.id });
+      const title=svg('title'); title.textContent=`${edgeName(edge)} route`; group.append(title);
+      group.append(svg('line',{ class:'route-line', x1:from.x,y1:from.y,x2:to.x,y2:to.y,'aria-hidden':'true' }));
+      group.append(svg('line',{ class:'route-hit', x1:from.x,y1:from.y,x2:to.x,y2:to.y,'aria-hidden':'true' }));
+      group.addEventListener('click',()=>toggleEdge(edge.id));
+      group.addEventListener('keydown',event=>{ if(event.key==='Enter'||event.key===' '){ event.preventDefault(); toggleEdge(edge.id); } });
+      group.addEventListener('focus',()=>traceEdge(edge.id)); group.addEventListener('blur',()=>traceEdge(null));
+      group.addEventListener('mouseenter',()=>traceEdge(edge.id)); group.addEventListener('mouseleave',()=>traceEdge(null));
+      edgeLayer.append(group);
+    }
+    for (const vertex of VERTICES) {
+      const group = svg('g',{ class:`vertex ${vertex.id}`, tabindex:'0', role:'button', 'data-vertex-id':vertex.id, style:`--vertex-color:${vertex.color}` });
+      group.append(svg('circle',{ class:'component-ring',cx:vertex.x,cy:vertex.y,r:'64' }));
+      group.append(svg('circle',{ cx:vertex.x,cy:vertex.y,r:vertex.id==='courtyard'?'55':'50' }));
+      const name = svg('text',{x:vertex.x,y:vertex.y+6}); name.textContent=vertex.label; group.append(name);
+      if(vertex.id==='spawn'||vertex.id==='boss') { const symbol=svg('text',{class:'symbol',x:vertex.x,y:vertex.y-25}); symbol.textContent=vertex.id==='spawn'?'▶ START':'◆ GOAL'; group.append(symbol); }
+      group.addEventListener('click',()=>selectVertex(vertex.id));
+      group.addEventListener('keydown',event=>{ if(event.key==='Enter'||event.key===' '){event.preventDefault();selectVertex(vertex.id);} });
+      vertexLayer.append(group);
+    }
+  }
+
+  function toggleEdge(id) {
+    const edge=EDGES.find(item=>item.id===id), wasActive=state.activeIds.has(id);
+    state.toggle(id); lastToggledEdgeId=id;
+    render(`${edgeName(edge)} ${wasActive?'disabled':'enabled'}.`);
+    window.setTimeout(()=>{ if(lastToggledEdgeId===id){ lastToggledEdgeId=null; render(); } },230);
+  }
+  function selectVertex(id) { selectedVertexId=selectedVertexId===id?null:id; renderSelectionAnnouncement(); }
+  function clearSelection() { if(selectedVertexId){selectedVertexId=null;render('Vertex selection cleared.');} }
+  function traceEdge(id) { focusedEdgeId=id; const model=derive(state.activeIds); renderMatrix(model); updateSelectionSummary(model); document.querySelectorAll('.route').forEach(el=>el.classList.toggle('hovered',el.dataset.edgeId===id)); }
+
+  function render(prefix) {
+    const model=derive(state.activeIds);
+    renderMap(model); renderEdgeSet(model); renderDegrees(model); renderList(model); renderMatrix(model); renderHandshake(model); renderStatus(model);
+    document.getElementById('undoButton').disabled=!state.canUndo;
+    document.getElementById('clearButton').disabled=!selectedVertexId;
+    const minimal=document.getElementById('minimalObservation');
+    minimal.innerHTML=model.isMinimalConnected?'<strong>Observation:</strong> Yes—this connected map has 5 vertices and 4 edges, previewing |E| = |V| − 1.':'<strong>Observation:</strong> Try a connected configuration with four active routes.';
+    if(prefix) document.getElementById('liveRegion').textContent=`${prefix} ${model.activeEdges.length} active edges. Graph ${model.isConnected?'is connected':`has ${model.components.length} components`}.`;
+  }
+
+  function renderMap(model) {
+    document.getElementById('mapWrap').classList.toggle('disconnected',!model.isConnected);
+    document.querySelectorAll('.route').forEach(group=>{
+      const edge=EDGES.find(item=>item.id===group.dataset.edgeId), active=state.activeIds.has(edge.id);
+      group.classList.toggle('disabled',!active); group.classList.toggle('incident',active&&!!selectedVertexId&&(edge.from===selectedVertexId||edge.to===selectedVertexId));
+      group.setAttribute('aria-pressed',String(active)); group.setAttribute('aria-label',`Route between ${edgeName(edge)}, ${active?'active':'disabled'}`);
+    });
+    document.querySelectorAll('.vertex').forEach(group=>{
+      const id=group.dataset.vertexId, index=indexes.get(id), componentIndex=model.components.findIndex(component=>component.includes(id));
+      group.classList.toggle('selected',id===selectedVertexId);
+      for(let i=0;i<VERTICES.length;i++) group.classList.toggle(`component-${i}`,i===componentIndex);
+      group.setAttribute('aria-pressed',String(id===selectedVertexId));
+      group.setAttribute('aria-label',`${labels.get(id)} vertex, degree ${model.degrees[index]}${id===selectedVertexId?', selected':''}`);
+    });
+    const summary=document.getElementById('componentsSummary');
+    summary.classList.toggle('show',!model.isConnected);
+    summary.textContent=!model.isConnected?`Components: ${model.components.map(c=>`{${c.map(id=>labels.get(id)).join(', ')}}`).join(' and ')}`:'';
+    updateSelectionSummary(model);
+  }
+
+  function renderEdgeSet(model) {
+    const container=document.getElementById('edgeSet'); container.replaceChildren();
+    const opening=document.createElement('span'); opening.textContent='E = {'; container.append(opening);
+    for(const edge of model.activeEdges){ const entry=document.createElement('span'); entry.className=`edge-entry${selectedVertexId&&(edge.from===selectedVertexId||edge.to===selectedVertexId)?' incident':''}${edge.id===lastToggledEdgeId?' affected':''}`; entry.textContent=`{${labels.get(edge.from)}, ${labels.get(edge.to)}}`; container.append(entry); }
+    const closing=document.createElement('span'); closing.textContent='}'; container.append(closing);
+    document.getElementById('setCount').textContent=`|E| = ${model.activeEdges.length}`;
+  }
+
+  function renderDegrees(model) {
+    const grid=document.getElementById('degreeGrid'); grid.replaceChildren();
+    const affectedEdge=EDGES.find(edge=>edge.id===lastToggledEdgeId);
+    VERTICES.forEach((vertex,index)=>{ const row=document.createElement('div'); row.className=`degree-row${vertex.id===selectedVertexId?' selected':''}${affectedEdge&&(affectedEdge.from===vertex.id||affectedEdge.to===vertex.id)?' affected':''}`; row.style.setProperty('--vertex-color',vertex.color); row.textContent=`d(${vertex.label}) = ${model.degrees[index]}`; grid.append(row); });
+    document.getElementById('degreeSequence').textContent=`Degree sequence: (${model.degreeSequence.join(', ')})`;
+  }
+
+  function renderList(model) {
+    const list=document.getElementById('adjacencyList'); list.replaceChildren();
+    const affectedEdge=EDGES.find(edge=>edge.id===lastToggledEdgeId);
+    for(const vertex of VERTICES){ const row=document.createElement('div'); row.className=`list-row${vertex.id===selectedVertexId?' selected':''}${affectedEdge&&(affectedEdge.from===vertex.id||affectedEdge.to===vertex.id)?' affected':''}`;
+      const name=document.createElement('span'); name.className='list-name'; name.style.setProperty('--vertex-color',vertex.color); name.textContent=`${vertex.label}:`;
+      const neighbors=document.createElement('span'); const ids=model.adjacencyList.get(vertex.id);
+      if(!ids.length) neighbors.textContent='∅'; else ids.forEach((id,index)=>{ const span=document.createElement('span'); span.className=id===selectedVertexId?'neighbor selected-neighbor':'neighbor'; span.textContent=`${index?', ':''}${labels.get(id)}`; neighbors.append(span); });
+      row.append(name,neighbors); list.append(row); }
+  }
+
+  function renderMatrix(model) {
+    const table=document.getElementById('matrix'); table.replaceChildren();
+    const caption=document.createElement('caption'); caption.className='sr-only'; caption.textContent='Adjacency matrix in Spawn, Armory, Courtyard, Tower, Boss order'; table.append(caption);
+    const head=document.createElement('thead'), headRow=document.createElement('tr'), corner=document.createElement('th'); corner.scope='col'; corner.textContent=''; headRow.append(corner);
+    for(const vertex of VERTICES){ const th=document.createElement('th'); th.scope='col'; th.className=`vertex-head${vertex.id===selectedVertexId?' selected-axis':''}`; th.style.setProperty('--vertex-color',vertex.color); th.title=vertex.label; th.setAttribute('aria-label',vertex.label); th.textContent=vertex.shortLabel; headRow.append(th); } head.append(headRow); table.append(head);
+    const body=document.createElement('tbody');
+    VERTICES.forEach((rowVertex,rowIndex)=>{ const row=document.createElement('tr'), th=document.createElement('th'); th.scope='row'; th.className=`row-head${rowVertex.id===selectedVertexId?' selected-axis':''}`; th.style.setProperty('--vertex-color',rowVertex.color); th.title=rowVertex.label; th.setAttribute('aria-label',rowVertex.label); th.textContent=rowVertex.shortLabel; row.append(th);
+      VERTICES.forEach((columnVertex,columnIndex)=>{ const value=model.matrix[rowIndex][columnIndex], cell=document.createElement('td'); const traced=focusedEdgeId&&(()=>{const e=EDGES.find(edge=>edge.id===focusedEdgeId);return(e.from===rowVertex.id&&e.to===columnVertex.id)||(e.to===rowVertex.id&&e.from===columnVertex.id);})(); const changed=lastToggledEdgeId&&(()=>{const e=EDGES.find(edge=>edge.id===lastToggledEdgeId);return(e.from===rowVertex.id&&e.to===columnVertex.id)||(e.to===rowVertex.id&&e.from===columnVertex.id);})(); cell.className=`${value?'one':'zero'}${selectedVertexId&&(rowVertex.id===selectedVertexId||columnVertex.id===selectedVertexId)?' selected-axis':''}${traced?' edge-trace':''}${changed?' affected':''}`; cell.textContent=value; cell.setAttribute('aria-label',`${rowVertex.label} to ${columnVertex.label}: ${value}`); row.append(cell); }); body.append(row); }); table.append(body);
+  }
+
+  function renderHandshake(model) { document.getElementById('handshake').innerHTML=`Σ d(v) = ${model.degrees.join(' + ')} = ${model.degreeSum}<br>2|E| = 2(${model.activeEdges.length}) = ${model.handshake.rightSide}<br><span class="verified">${model.degreeSum} = ${model.handshake.rightSide} &nbsp; Verified ✓</span>`; }
+  function renderStatus(model) { document.getElementById('edgeMetric').textContent=model.activeEdges.length; document.getElementById('connectedMetric').textContent=model.isConnected?'Yes':'No'; document.getElementById('componentMetric').textContent=model.components.length; }
+  function updateSelectionSummary(model) { const box=document.getElementById('selectionSummary'); if(!selectedVertexId){ if(focusedEdgeId){box.textContent=`Route: ${edgeName(EDGES.find(edge=>edge.id===focusedEdgeId))}. Its two symmetric matrix cells are highlighted.`;}else{box.textContent='Select a room to trace it across every representation.';} return;} const vertex=VERTICES[indexes.get(selectedVertexId)],neighbors=model.adjacencyList.get(selectedVertexId).map(id=>labels.get(id)); box.textContent=`${vertex.label} has degree ${model.degrees[indexes.get(selectedVertexId)]} and is adjacent to ${neighbors.length?neighbors.join(', '):'no vertices'}.`; }
+  function renderSelectionAnnouncement() { const model=derive(state.activeIds); render(); if(!selectedVertexId){document.getElementById('liveRegion').textContent='Vertex selection cleared.';return;} const vertex=VERTICES[indexes.get(selectedVertexId)],neighbors=model.adjacencyList.get(selectedVertexId).map(id=>labels.get(id)); document.getElementById('liveRegion').textContent=`${vertex.label} selected. Degree ${model.degrees[indexes.get(selectedVertexId)]}. Adjacent to ${neighbors.length?neighbors.join(', '):'no vertices'}.`; }
+
+  document.getElementById('undoButton').addEventListener('click',()=>{if(state.undo()){lastToggledEdgeId=null;render('Undid the most recent route change.');}});
+  document.getElementById('resetButton').addEventListener('click',()=>{state.reset();selectedVertexId=null;focusedEdgeId=null;lastToggledEdgeId=null;render('Console reset. All six routes are active.');});
+  document.getElementById('clearButton').addEventListener('click',clearSelection);
+  document.addEventListener('keydown',event=>{if(event.key==='Escape')clearSelection();});
+  buildMap(); render('Console ready.');
+})();
+</script>
+</body>
+</html>
