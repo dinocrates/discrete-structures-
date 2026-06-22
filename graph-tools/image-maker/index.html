@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Graph Image Maker — §2.1</title>
+  <link rel="stylesheet" href="../shared/graph-style.css" />
+  <style>
+    body { padding: 1rem; }
+
+    .toolbar {
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+      background: #fff; border: 1.5px solid var(--border);
+      border-radius: var(--r) var(--r) 0 0; padding: 8px 12px; border-bottom: none;
+    }
+    .tool-sep { width: 1px; height: 26px; background: var(--border); margin: 0 2px; flex-shrink: 0; }
+
+    .tool-btn {
+      display: flex; align-items: center; gap: 5px;
+      padding: 6px 13px; border: 1.5px solid var(--border); border-radius: var(--rs);
+      background: var(--bg2); color: var(--text2);
+      font-size: 12px; font-family: var(--sans); cursor: pointer; white-space: nowrap;
+      transition: all .12s; user-select: none;
+    }
+    .tool-btn:hover  { background: var(--bg3); border-color: var(--text3); color: var(--text); }
+    .tool-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); font-weight: 600; }
+    .tool-btn.active:hover { background: #1d4ed8; }
+    .tool-btn.erase-btn         { color: var(--red); }
+    .tool-btn.erase-btn:hover   { background: var(--rbg); border-color: var(--red); }
+    .tool-btn.erase-btn.active  { background: var(--red); color: #fff; border-color: #991b1c; }
+    .tool-btn.erase-btn.active:hover { background: #b91c1c; }
+
+    .vertex-chip {
+      display: flex; align-items: center; gap: 7px;
+      padding: 4px 13px 4px 7px;
+      border: 1.5px dashed #93c5fd; border-radius: var(--rs);
+      background: var(--pbg); color: var(--primary);
+      font-size: 12px; font-family: var(--sans); cursor: grab; white-space: nowrap;
+      transition: all .12s; user-select: none; font-weight: 500;
+    }
+    .vertex-chip:hover  { background: #dbeafe; border-color: var(--primary); }
+    .vertex-chip:active { cursor: grabbing; }
+    .chip-circle {
+      width: 26px; height: 26px; border-radius: 50%;
+      background: #fff; border: 2px solid var(--primary);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; font-family: ui-monospace,monospace;
+      color: var(--primary); flex-shrink: 0;
+    }
+
+    .status-bar {
+      background: var(--bg2); border-left: 1.5px solid var(--border);
+      border-right: 1.5px solid var(--border);
+      padding: 5px 14px; font-size: 12px; color: var(--text3);
+      min-height: 30px; line-height: 1.5;
+    }
+    .status-bar.s-select { color: var(--text2); }
+    .status-bar.s-edge   { color: #1d4ed8; background: #dbeafe; }
+    .status-bar.s-place  { color: #6d28d9; background: #ede9fe; }
+    .status-bar.s-erase  { color: #991b1b; background: #fff1f2; }
+    .status-bar.s-ok     { color: var(--green);  background: var(--gbg); }
+    .status-bar.s-warn   { color: var(--amber);  background: var(--abg); }
+
+    .canvas-wrap {
+      border: 1.5px solid var(--border); border-top: none; border-bottom: none;
+      background: #f8fafc; position: relative; overflow: hidden;
+    }
+    .canvas-wrap svg { display: block; width: 100%; touch-action: none; user-select: none; }
+    .canvas-wrap.m-select svg { cursor: default; }
+    .canvas-wrap.m-edge   svg { cursor: crosshair; }
+    .canvas-wrap.m-place  svg { cursor: copy; }
+    .canvas-wrap.m-drag   svg { cursor: grabbing; }
+    .canvas-wrap.m-erase  svg { cursor: crosshair; }
+
+    /* ── Export bar ── */
+    .export-bar {
+      border: 1.5px solid var(--border); border-top: 1.5px solid var(--border);
+      border-radius: 0 0 var(--r) var(--r);
+      background: #fff; padding: 9px 14px;
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    }
+    .export-btn {
+      display: flex; align-items: center; gap: 6px;
+      padding: 7px 16px; border-radius: var(--rs); border: 1.5px solid;
+      font-size: 12px; font-family: var(--sans); font-weight: 600;
+      cursor: pointer; white-space: nowrap; transition: all .12s;
+    }
+    .export-btn-png {
+      background: #eff6ff; color: #1d4ed8; border-color: #93c5fd;
+    }
+    .export-btn-png:hover { background: #dbeafe; border-color: #2563eb; }
+    .export-btn-svg {
+      background: #f0fdf4; color: #166534; border-color: #86efac;
+    }
+    .export-btn-svg:hover { background: #dcfce7; border-color: #16a34a; }
+    .export-btn-copy {
+      background: #faf5ff; color: #6b21a8; border-color: #d8b4fe;
+    }
+    .export-btn-copy:hover { background: #ede9fe; border-color: #7c3aed; }
+    .export-btn-copy.copied { background: #dcfce7; color: #166534; border-color: #86efac; }
+
+    .export-opt {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 12px; color: var(--text2); cursor: pointer;
+    }
+    .export-opt input[type=checkbox] { accent-color: var(--primary); cursor: pointer; }
+
+    .export-sep { width: 1px; height: 22px; background: var(--border); }
+
+    .scale-row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); }
+    .scale-row select {
+      font-size: 12px; font-family: var(--sans); padding: 4px 8px;
+      border: 1.5px solid var(--border); border-radius: var(--rs);
+      background: var(--bg2); color: var(--text2); cursor: pointer;
+    }
+
+    .export-stats { margin-left: auto; font-size: 11px; color: var(--text3); }
+
+    /* ── Import panel ── */
+    .import-section { margin-top: 10px; border: 1.5px solid var(--border); border-radius: var(--r); background: #fff; overflow: hidden; }
+
+    .import-toggle {
+      width: 100%; display: flex; align-items: center; gap: 8px;
+      padding: 9px 14px; background: none; border: none; cursor: pointer;
+      font-size: 12px; font-family: var(--sans); font-weight: 600;
+      color: var(--text2); text-align: left; transition: background .12s;
+    }
+    .import-toggle:hover { background: var(--bg2); }
+    .import-toggle svg { transition: transform .2s; flex-shrink: 0; }
+    .import-toggle.open svg { transform: rotate(90deg); }
+
+    .import-body { border-top: 1.5px solid var(--border); padding: 12px 14px; }
+
+    .import-tabs { display: flex; gap: 0; border: 1.5px solid var(--border); border-radius: var(--rs); overflow: hidden; width: fit-content; margin-bottom: 8px; }
+    .import-tab { padding: 5px 14px; border: none; background: var(--bg2); color: var(--text2); font-size: 11px; font-family: var(--sans); cursor: pointer; transition: all .12s; border-right: 1px solid var(--border); }
+    .import-tab:last-child { border-right: none; }
+    .import-tab.active { background: var(--primary); color: #fff; font-weight: 700; }
+
+    .import-hint { font-size: 11px; color: var(--text3); margin-bottom: 6px; line-height: 1.7; }
+    .import-hint code { font-family: var(--mono); background: var(--bg2); padding: 1px 5px; border-radius: 3px; font-size: 11px; }
+
+    .import-row { display: flex; gap: 10px; align-items: flex-start; }
+    .import-textarea {
+      flex: 1; min-height: 80px; resize: vertical;
+      font-family: var(--mono); font-size: 12px; padding: 8px 10px;
+      border: 1.5px solid var(--border); border-radius: var(--rs);
+      background: var(--bg); color: var(--text); outline: none; line-height: 1.6;
+    }
+    .import-textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--pbg); }
+
+    .import-err { margin-top: 6px; font-size: 11px; color: var(--red); }
+
+    #ghost {
+      position: fixed; width: 44px; height: 44px; border-radius: 50%;
+      background: #fff; border: 2.5px solid var(--primary);
+      display: none; align-items: center; justify-content: center;
+      font-family: ui-monospace,monospace; font-size: 13px; font-weight: 700; color: var(--primary);
+      pointer-events: none; z-index: 9999;
+      transform: translate(-50%, -50%);
+      opacity: .88; box-shadow: 0 2px 14px rgba(37,99,235,.28);
+    }
+  </style>
+</head>
+<body>
+<div class="gt-page">
+
+  <a class="gt-back" href="../index.html">← Graph Theory Tools</a>
+
+  <div class="gt-header" style="margin-bottom:.7rem;">
+    <div class="gt-badge">§2.1 — Export Tool</div>
+    <div class="gt-title">Graph Image Maker</div>
+    <p class="gt-desc">Draw a graph, then download it as a PNG or SVG — ready for slides, notes, or homework.</p>
+  </div>
+
+  <div class="toolbar">
+    <button class="tool-btn active" id="btnSelect" onclick="setMode('select')" title="Select &amp; move (S)">
+      <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+        <path d="M2 2l3.5 9.5 1.8-4L12 5.5z"/>
+      </svg>
+      SELECT
+    </button>
+
+    <div class="vertex-chip" id="vertexChip" title="Drag onto canvas — or click for place mode (V)">
+      <div class="chip-circle" id="chipLabel">A</div>
+      VERTEX
+    </div>
+
+    <button class="tool-btn" id="btnEdge" onclick="setMode('edge')" title="Connect vertices (E)">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+        <circle cx="2.5" cy="7" r="2"/><circle cx="11.5" cy="7" r="2"/><line x1="4.5" y1="7" x2="9.5" y2="7"/>
+      </svg>
+      EDGE
+    </button>
+
+    <button class="tool-btn erase-btn" id="btnErase" onclick="setMode('erase')" title="Click vertices or edges to erase (D)">
+      <svg width="15" height="12" viewBox="0 0 15 12" fill="none">
+        <rect x="1" y="4" width="13" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/>
+        <rect x="1" y="4" width="4.5" height="7" rx="1.5" fill="currentColor" opacity=".35" stroke="currentColor" stroke-width="1.3"/>
+        <line x1="5.5" y1="4" x2="5.5" y2="11" stroke="currentColor" stroke-width="1.3"/>
+        <line x1="7" y1="7" x2="13" y2="7" stroke="currentColor" stroke-width="1" opacity=".5"/>
+        <line x1="7" y1="9.5" x2="13" y2="9.5" stroke="currentColor" stroke-width="1" opacity=".5"/>
+      </svg>
+      DELETE
+    </button>
+
+    <div class="tool-sep"></div>
+    <button class="tool-btn" onclick="clearGraph()">CLEAR</button>
+    <div class="tool-sep"></div>
+
+    <select class="gt-select" id="exampleSel" onchange="loadExample(this.value)" style="font-size:12px;padding:5px 10px;">
+      <option value="">Load example…</option>
+      <option value="triangle">Triangle</option>
+      <option value="P4">Path P₄</option>
+      <option value="C5">Cycle C₅</option>
+      <option value="K4">Complete K₄</option>
+      <option value="disconnected">Disconnected graph</option>
+    </select>
+
+    <span style="margin-left:auto;font-size:10px;color:var(--text3);white-space:nowrap;">S · V · E · D · Esc</span>
+  </div>
+
+  <div class="status-bar s-select" id="statusBar">
+    SELECT — click a vertex or edge to select it. Drag vertices to reposition.
+  </div>
+
+  <div class="canvas-wrap m-select" id="canvasWrap">
+    <svg id="graphSvg" viewBox="0 0 800 480" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <filter id="vshadow" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="1" stdDeviation="2.5" flood-color="#00000015"/>
+        </filter>
+      </defs>
+      <g id="layer-edges"></g>
+      <line id="tempEdge" stroke="#2563eb" stroke-width="2" stroke-dasharray="8,5"
+            stroke-linecap="round" pointer-events="none" style="display:none"/>
+      <g id="layer-verts"></g>
+      <text id="hint" x="400" y="240" text-anchor="middle" fill="#cbd5e1"
+            font-size="13" font-family="ui-monospace,monospace" pointer-events="none">
+        Drag a VERTEX from the toolbar onto the canvas, or press V to click-place.
+      </text>
+    </svg>
+  </div>
+
+  <div class="export-bar">
+    <button class="export-btn export-btn-png" onclick="downloadPNG()">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <path d="M7 2v8M4 7l3 3 3-3"/><line x1="2" y1="12" x2="12" y2="12"/>
+      </svg>
+      Download PNG
+    </button>
+    <button class="export-btn export-btn-copy" id="copyBtn" onclick="copyToClipboard()">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M9 5V3.5A1.5 1.5 0 007.5 2H3.5A1.5 1.5 0 002 3.5v4A1.5 1.5 0 003.5 9H5"/>
+      </svg>
+      Copy PNG
+    </button>
+    <button class="export-btn export-btn-svg" onclick="downloadSVG()">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <path d="M7 2v8M4 7l3 3 3-3"/><line x1="2" y1="12" x2="12" y2="12"/>
+      </svg>
+      Download SVG
+    </button>
+
+    <div class="export-sep"></div>
+
+    <label class="export-opt">
+      <input type="checkbox" id="whiteBg" checked />
+      White background
+    </label>
+
+    <div class="scale-row">
+      PNG scale:
+      <select id="scaleSelect">
+        <option value="1">1× (800×480)</option>
+        <option value="2" selected>2× (1600×960)</option>
+        <option value="3">3× (2400×1440)</option>
+      </select>
+    </div>
+
+    <div class="export-stats" id="exportStats">0 vertices · 0 edges</div>
+  </div>
+
+  <!-- Load from text -->
+  <div class="import-section">
+    <button class="import-toggle" id="importToggle" onclick="toggleImport()">
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 1l4 4-4 4"/>
+      </svg>
+      Load from text
+    </button>
+    <div class="import-body" id="importBody" style="display:none">
+      <div class="import-tabs">
+        <button class="import-tab active" id="itab-edge" onclick="setImportMode('edge')">Edge List</button>
+        <button class="import-tab" id="itab-adj"  onclick="setImportMode('adj')">Adj. List</button>
+        <button class="import-tab" id="itab-mat"  onclick="setImportMode('mat')">Matrix</button>
+      </div>
+
+      <div id="ihint-edge" class="import-hint">One edge per line: <code>A B</code> or <code>A, B</code></div>
+      <div id="ihint-adj"  class="import-hint" style="display:none">Vertex then neighbors: <code>A: B, C</code> — list every vertex, even isolated ones.</div>
+      <div id="ihint-mat"  class="import-hint" style="display:none">Optional first line: <code>Labels: A B C</code> — then the 0/1 matrix, one row per line.</div>
+
+      <textarea class="import-textarea" id="importText" placeholder="A B&#10;A C&#10;B C" oninput="importGraph()"></textarea>
+      <div class="import-err" id="importErr" style="display:none"></div>
+    </div>
+  </div>
+
+</div>
+
+<div id="ghost"><span id="ghostLbl">A</span></div>
+
+<script src="../shared/graph-core.js"></script>
+<script src="../shared/graph-algorithms.js"></script>
+<script src="../shared/graph-parsers.js"></script>
+<script>
+// ── Custom cursors ─────────────────────────────────────────────────────────────
+const ERASER_SVG = [
+  '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">',
+  '<rect x="5" y="17" width="23" height="11" rx="2" fill="rgba(0,0,0,0.12)"/>',
+  '<rect x="4" y="13" width="23" height="11" rx="2" fill="#fff7ed" stroke="#374151" stroke-width="1.5"/>',
+  '<rect x="4" y="13" width="9" height="11" rx="2" fill="#ef4444" stroke="#9f1239" stroke-width="1.5"/>',
+  '<line x1="13" y1="13" x2="13" y2="24" stroke="#9f1239" stroke-width="1.5"/>',
+  '<line x1="16" y1="17" x2="25" y2="17" stroke="#3b82f6" stroke-width="1.2" stroke-linecap="round"/>',
+  '<line x1="16" y1="20.5" x2="25" y2="20.5" stroke="#3b82f6" stroke-width="1.2" stroke-linecap="round"/>',
+  '<rect x="5" y="14" width="5" height="3" rx="1" fill="rgba(255,255,255,0.4)"/>',
+  '</svg>'
+].join('');
+
+const SCISSORS_SVG = [
+  '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28">',
+  '<circle cx="6" cy="7" r="4" fill="white" stroke="#dc2626" stroke-width="1.5"/>',
+  '<circle cx="6" cy="21" r="4" fill="white" stroke="#dc2626" stroke-width="1.5"/>',
+  '<line x1="9.5" y1="9.5" x2="27" y2="26" stroke="#dc2626" stroke-width="2" stroke-linecap="round"/>',
+  '<line x1="9.5" y1="18.5" x2="27" y2="2" stroke="#dc2626" stroke-width="2" stroke-linecap="round"/>',
+  '</svg>'
+].join('');
+
+const CUR_ERASE    = `url("data:image/svg+xml;base64,${btoa(ERASER_SVG)}")    4 24, crosshair`;
+const CUR_SCISSORS = `url("data:image/svg+xml;base64,${btoa(SCISSORS_SVG)}") 14 14, crosshair`;
+
+// ── Constants ──────────────────────────────────────────────────────────────────
+const R     = 22;
+const HIT_R = 28;
+
+// ── State ──────────────────────────────────────────────────────────────────────
+const graph = new Graph();
+let mode    = 'select';
+let sel     = null;
+let vDrag   = null;
+let eDrag   = null;
+let hoverV  = null;
+let eraseH  = null;
+let chipDragging = false;
+let chipMoved    = false;
+
+// ── DOM refs ───────────────────────────────────────────────────────────────────
+const svg      = document.getElementById('graphSvg');
+const layerE   = document.getElementById('layer-edges');
+const layerV   = document.getElementById('layer-verts');
+const tempEdge = document.getElementById('tempEdge');
+const hintEl   = document.getElementById('hint');
+const wrap     = document.getElementById('canvasWrap');
+const statusEl = document.getElementById('statusBar');
+const ghost    = document.getElementById('ghost');
+const ghostLbl = document.getElementById('ghostLbl');
+const chipLbl  = document.getElementById('chipLabel');
+
+// ── Coordinate helpers ─────────────────────────────────────────────────────────
+function svgPt(cx, cy) {
+  const r  = svg.getBoundingClientRect();
+  const sx = svg.viewBox.baseVal.width  / r.width;
+  const sy = svg.viewBox.baseVal.height / r.height;
+  return { x: (cx - r.left) * sx, y: (cy - r.top) * sy };
+}
+
+function vertexAt(x, y) {
+  return graph.vertices.find(v => Math.hypot(v.x - x, v.y - y) <= HIT_R) || null;
+}
+
+function edgeNear(x, y) {
+  for (const e of graph.edges) {
+    const s = graph.vertices.find(v => v.id === e.source);
+    const t = graph.vertices.find(v => v.id === e.target);
+    if (s && t && ptToSeg(x, y, s.x, s.y, t.x, t.y) < 10) return e;
+  }
+  return null;
+}
+
+function ptToSeg(px, py, ax, ay, bx, by) {
+  const dx = bx-ax, dy = by-ay, l2 = dx*dx+dy*dy;
+  if (!l2) return Math.hypot(px-ax, py-ay);
+  const t = Math.max(0, Math.min(1, ((px-ax)*dx+(py-ay)*dy)/l2));
+  return Math.hypot(px-(ax+t*dx), py-(ay+t*dy));
+}
+
+// ── Mode ───────────────────────────────────────────────────────────────────────
+function setMode(m) {
+  mode = m;
+  eDrag = null; vDrag = null; hoverV = null; eraseH = null; sel = null;
+  tempEdge.style.display = 'none';
+  if (m === 'erase') svg.style.cursor = CUR_ERASE;
+  else               svg.style.cursor = '';
+  wrap.className = 'canvas-wrap m-' + m;
+  document.getElementById('btnSelect').classList.toggle('active', m === 'select');
+  document.getElementById('btnEdge').classList.toggle('active',   m === 'edge');
+  document.getElementById('btnErase').classList.toggle('active',  m === 'erase');
+  setStatus();
+  render();
+}
+
+// ── Status ─────────────────────────────────────────────────────────────────────
+let flashTmr = null;
+function setStatus(msg, cls) {
+  clearTimeout(flashTmr);
+  if (msg) {
+    statusEl.className = 'status-bar ' + (cls || 's-ok');
+    statusEl.textContent = msg;
+    if (cls !== 's-err' && cls !== 's-warn') flashTmr = setTimeout(setStatus, 2200);
+    return;
+  }
+  if (mode === 'select') {
+    statusEl.className = 'status-bar s-select';
+    if (sel?.type === 'vertex') {
+      const v = graph.vertices.find(v => v.id === sel.id);
+      statusEl.textContent = v ? `Vertex ${v.label} selected — drag to move, press Delete to remove.` : '';
+    } else if (sel?.type === 'edge') {
+      const e = graph.edges.find(e => e.id === sel.id);
+      statusEl.textContent = e ? `Edge {${e.source},${e.target}} selected — press Delete to remove.` : '';
+    } else {
+      statusEl.textContent = 'SELECT — click a vertex or edge to select. Drag vertices to reposition.';
+    }
+  } else if (mode === 'edge') {
+    statusEl.className = 'status-bar s-edge';
+    statusEl.textContent = eDrag
+      ? 'Click another vertex to connect it — or click the source again to cancel.'
+      : 'EDGE — click a vertex to start drawing an edge.';
+  } else if (mode === 'place') {
+    statusEl.className = 'status-bar s-place';
+    statusEl.textContent = 'PLACE VERTEX — click anywhere on the canvas to place a vertex. Escape to cancel.';
+  } else if (mode === 'erase') {
+    statusEl.className = 'status-bar s-erase';
+    if (eraseH?.type === 'vertex') {
+      const v = graph.vertices.find(v => v.id === eraseH.id);
+      statusEl.textContent = v ? `Click to delete vertex ${v.label} and all its edges.` : '';
+    } else if (eraseH?.type === 'edge') {
+      const e = graph.edges.find(e => e.id === eraseH.id);
+      statusEl.textContent = e ? `Click to cut edge {${e.source},${e.target}}.` : '';
+    } else {
+      statusEl.textContent = 'DELETE — hover over a vertex to erase it, or an edge to cut it.';
+    }
+  }
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────────
+function render() {
+  hintEl.style.display = graph.vertices.length === 0 ? '' : 'none';
+  renderEdges();
+  renderVerts();
+  const lbl = graph._nextLabel();
+  chipLbl.textContent = lbl;
+  ghostLbl.textContent = lbl;
+  document.getElementById('exportStats').textContent =
+    `${graph.vertices.length} ${graph.vertices.length===1?'vertex':'vertices'} · ` +
+    `${graph.edges.length} ${graph.edges.length===1?'edge':'edges'}`;
+}
+
+function renderEdges() {
+  layerE.innerHTML = '';
+  for (const e of graph.edges) {
+    const s = graph.vertices.find(v => v.id === e.source);
+    const t = graph.vertices.find(v => v.id === e.target);
+    if (!s || !t) continue;
+
+    const isSel   = sel?.type === 'edge' && sel.id === e.id;
+    const isErase = eraseH?.type === 'edge' && eraseH.id === e.id;
+
+    const hit = mkel('line', { x1:s.x, y1:s.y, x2:t.x, y2:t.y, stroke:'transparent', 'stroke-width':20 });
+    hit.addEventListener('mousedown', ev => {
+      if (mode === 'select') { ev.stopPropagation(); setSel('edge', e.id); }
+    });
+    layerE.appendChild(hit);
+
+    const line = mkel('line', {
+      x1:s.x, y1:s.y, x2:t.x, y2:t.y,
+      stroke: isErase ? '#dc2626' : isSel ? '#2563eb' : '#64748b',
+      'stroke-width': isErase ? 3.5 : isSel ? 3 : 2,
+      'stroke-linecap': 'round', 'pointer-events': 'none',
+      'stroke-dasharray': isErase ? '7,4' : 'none'
+    });
+    layerE.appendChild(line);
+
+    if (isErase) {
+      const mx = (s.x + t.x) / 2, my = (s.y + t.y) / 2;
+      layerE.appendChild(mkel('circle', { cx:mx, cy:my, r:12, fill:'#fff', stroke:'#dc2626', 'stroke-width':1.5, 'pointer-events':'none' }));
+      const icon = mkel('text', { x:mx, y:my+1, 'text-anchor':'middle', 'dominant-baseline':'central', 'font-size':14, fill:'#dc2626', 'pointer-events':'none', 'font-family':'sans-serif' });
+      icon.textContent = '✂';
+      layerE.appendChild(icon);
+    }
+  }
+}
+
+function renderVerts() {
+  layerV.innerHTML = '';
+  for (const v of graph.vertices) {
+    const isSel    = sel?.type === 'vertex' && sel.id === v.id;
+    const isSrc    = eDrag?.srcId === v.id;
+    const isHoverE = hoverV === v.id && mode === 'edge' && !eDrag;
+    const isEraseH = eraseH?.type === 'vertex' && eraseH.id === v.id;
+
+    const g = mkel('g');
+    g.setAttribute('data-vid', v.id);
+
+    if (isSel || isSrc || isHoverE || isEraseH) {
+      g.appendChild(mkel('circle', {
+        cx: v.x, cy: v.y, r: R + 7,
+        fill:   isEraseH ? 'rgba(220,38,38,.1)' : 'rgba(37,99,235,.08)',
+        stroke: isEraseH ? '#fca5a5' : '#93c5fd',
+        'stroke-width': 1.5, 'pointer-events': 'none'
+      }));
+    }
+
+    const circle = mkel('circle', {
+      cx: v.x, cy: v.y, r: R,
+      fill:   isEraseH ? '#fff1f2' : isSel ? '#eff6ff' : '#ffffff',
+      stroke: isEraseH ? '#dc2626' : (isSel||isSrc) ? '#2563eb' : '#334155',
+      'stroke-width': isEraseH ? 2.5 : (isSel||isSrc) ? 2.5 : 2,
+      filter: 'url(#vshadow)'
+    });
+    if (mode === 'select') circle.style.cursor = 'grab';
+    if (mode === 'edge')   circle.style.cursor = 'pointer';
+
+    const lbl = mkel('text', {
+      x: v.x, y: v.y, 'text-anchor':'middle', 'dominant-baseline':'central',
+      'font-size': v.label.length > 2 ? 10 : 13, 'font-weight': 700,
+      'font-family': "ui-monospace,'Cascadia Code','Courier New',monospace",
+      fill: isEraseH ? '#dc2626' : (isSel||isSrc) ? '#2563eb' : '#0f172a',
+      'pointer-events': 'none'
+    });
+    lbl.textContent = v.label;
+
+    if (isEraseH) {
+      const xmark = mkel('text', {
+        x: v.x + R - 5, y: v.y - R + 5,
+        'text-anchor':'middle', 'dominant-baseline':'central',
+        'font-size':13, 'font-weight':700, 'font-family':'sans-serif',
+        fill:'#dc2626', 'pointer-events':'none'
+      });
+      xmark.textContent = '×';
+      g.appendChild(xmark);
+    }
+
+    g.appendChild(circle);
+    g.appendChild(lbl);
+
+    g.addEventListener('mousedown', ev => {
+      if (mode === 'erase') return;
+      ev.stopPropagation();
+      onVertexDown(ev, v.id);
+    });
+
+    layerV.appendChild(g);
+  }
+}
+
+function mkel(tag, attrs = {}) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  return el;
+}
+
+// ── Selection ──────────────────────────────────────────────────────────────────
+function setSel(type, id) { sel = {type, id}; render(); setStatus(); }
+function clearSel()        { sel = null;       render(); setStatus(); }
+
+// ── Erase ──────────────────────────────────────────────────────────────────────
+function eraseVertex(id) {
+  const v = graph.vertices.find(v => v.id === id);
+  const lbl = v?.label || id;
+  graph.removeVertex(id);
+  eraseH = null; svg.style.cursor = CUR_ERASE;
+  render(); setStatus(`Vertex ${lbl} deleted.`, 's-ok');
+}
+
+function eraseEdge(id) {
+  const e = graph.edges.find(e => e.id === id);
+  const desc = e ? `{${e.source},${e.target}}` : id;
+  graph.removeEdge(id);
+  eraseH = null; svg.style.cursor = CUR_ERASE;
+  render(); setStatus(`Edge ${desc} cut.`, 's-ok');
+}
+
+// ── SVG events ─────────────────────────────────────────────────────────────────
+svg.addEventListener('mousedown', ev => {
+  const pt = svgPt(ev.clientX, ev.clientY);
+
+  if (mode === 'erase') {
+    const v = vertexAt(pt.x, pt.y);
+    if (v) { eraseVertex(v.id); return; }
+    const e = edgeNear(pt.x, pt.y);
+    if (e) { eraseEdge(e.id); return; }
+    return;
+  }
+
+  if (mode === 'place') {
+    graph.addVertex(pt.x, pt.y);
+    setMode('select'); return;
+  }
+
+  if (mode === 'edge') {
+    if (eDrag) {
+      eDrag = null; hoverV = null;
+      tempEdge.style.display = 'none';
+      render(); setStatus();
+    }
+    return;
+  }
+
+  if (mode === 'select') {
+    const e = edgeNear(pt.x, pt.y);
+    if (e) setSel('edge', e.id);
+    else   clearSel();
+  }
+});
+
+svg.addEventListener('mousemove', ev => {
+  const pt = svgPt(ev.clientX, ev.clientY);
+
+  if (vDrag) {
+    wrap.className = 'canvas-wrap m-drag';
+    graph.moveVertex(vDrag.id, pt.x, pt.y);
+    render(); return;
+  }
+
+  if (mode === 'edge') {
+    if (eDrag) {
+      tempEdge.setAttribute('x2', pt.x);
+      tempEdge.setAttribute('y2', pt.y);
+    }
+    const v = vertexAt(pt.x, pt.y);
+    const newHover = v ? v.id : null;
+    if (newHover !== hoverV) { hoverV = newHover; renderVerts(); }
+    return;
+  }
+
+  if (mode === 'erase') {
+    const v = vertexAt(pt.x, pt.y);
+    if (v) {
+      if (!eraseH || eraseH.type !== 'vertex' || eraseH.id !== v.id) {
+        eraseH = {type:'vertex', id:v.id};
+        svg.style.cursor = CUR_ERASE;
+        setStatus(); renderVerts(); renderEdges();
+      }
+      return;
+    }
+    const e = edgeNear(pt.x, pt.y);
+    if (e) {
+      if (!eraseH || eraseH.type !== 'edge' || eraseH.id !== e.id) {
+        eraseH = {type:'edge', id:e.id};
+        svg.style.cursor = CUR_SCISSORS;
+        setStatus(); renderVerts(); renderEdges();
+      }
+      return;
+    }
+    if (eraseH !== null) {
+      eraseH = null; svg.style.cursor = CUR_ERASE;
+      setStatus(); renderVerts(); renderEdges();
+    }
+  }
+});
+
+svg.addEventListener('mouseup', ev => {
+  if (vDrag) { vDrag = null; wrap.className = 'canvas-wrap m-' + mode; }
+});
+
+svg.addEventListener('mouseleave', () => {
+  if (vDrag) { vDrag = null; wrap.className = 'canvas-wrap m-' + mode; }
+  if (mode === 'edge' && hoverV) { hoverV = null; renderVerts(); }
+  if (mode === 'erase' && eraseH) {
+    eraseH = null; svg.style.cursor = CUR_ERASE;
+    setStatus(); render();
+  }
+});
+
+// ── Per-vertex mousedown ───────────────────────────────────────────────────────
+function onVertexDown(ev, vid) {
+  if (mode === 'select') {
+    setSel('vertex', vid);
+    vDrag = { id: vid };
+    ev.preventDefault();
+  } else if (mode === 'edge') {
+    ev.preventDefault();
+    if (!eDrag) {
+      const v = graph.vertices.find(v => v.id === vid);
+      eDrag = { srcId: vid };
+      tempEdge.setAttribute('x1', v.x); tempEdge.setAttribute('y1', v.y);
+      tempEdge.setAttribute('x2', v.x); tempEdge.setAttribute('y2', v.y);
+      tempEdge.style.display = '';
+      render(); setStatus();
+    } else if (eDrag.srcId === vid) {
+      eDrag = null; hoverV = null;
+      tempEdge.style.display = 'none';
+      render(); setStatus();
+    } else {
+      const r = graph.addEdge(eDrag.srcId, vid);
+      eDrag = null; hoverV = null;
+      tempEdge.style.display = 'none';
+      if (r.error === 'duplicate') setStatus('Edge already exists.', 's-warn');
+      else if (r.error === 'loop')  setStatus('Loops are not allowed.', 's-warn');
+      else                          setStatus('Edge added.', 's-ok');
+      render();
+    }
+  }
+}
+
+// ── Keyboard ───────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', ev => {
+  const tag = ev.target.tagName;
+  if (tag==='INPUT'||tag==='SELECT'||tag==='TEXTAREA') return;
+  if (ev.key==='s'||ev.key==='S') setMode('select');
+  if (ev.key==='e'||ev.key==='E') setMode('edge');
+  if (ev.key==='v'||ev.key==='V') mode!=='place' ? setMode('place') : setMode('select');
+  if (ev.key==='d'||ev.key==='D') setMode('erase');
+  if ((ev.key==='Delete'||ev.key==='Backspace') && mode==='select' && sel) {
+    if (sel.type==='vertex') { graph.removeVertex(sel.id); sel=null; render(); setStatus(); }
+    else                     { graph.removeEdge(sel.id);   sel=null; render(); setStatus(); }
+  }
+  if (ev.key==='Escape') { mode !== 'select' ? setMode('select') : clearSel(); }
+});
+
+// ── Vertex chip drag ───────────────────────────────────────────────────────────
+const chip = document.getElementById('vertexChip');
+
+chip.addEventListener('mousedown', ev => {
+  chipDragging = true; chipMoved = false;
+  ghost.style.display = 'flex';
+  posGhost(ev.clientX, ev.clientY);
+  ev.preventDefault();
+});
+
+document.addEventListener('mousemove', ev => {
+  if (!chipDragging) return;
+  chipMoved = true;
+  posGhost(ev.clientX, ev.clientY);
+});
+
+document.addEventListener('mouseup', ev => {
+  if (!chipDragging) return;
+  ghost.style.display = 'none';
+  chipDragging = false;
+  if (chipMoved) {
+    const r = svg.getBoundingClientRect();
+    if (ev.clientX >= r.left && ev.clientX <= r.right &&
+        ev.clientY >= r.top  && ev.clientY <= r.bottom) {
+      const pt = svgPt(ev.clientX, ev.clientY);
+      graph.addVertex(pt.x, pt.y);
+      render(); setMode('select');
+    }
+  } else {
+    mode !== 'place' ? setMode('place') : setMode('select');
+  }
+});
+
+function posGhost(cx, cy) { ghost.style.left = cx + 'px'; ghost.style.top = cy + 'px'; }
+
+// ── Graph helpers ──────────────────────────────────────────────────────────────
+function clearGraph() {
+  graph.clear(); sel=null; eDrag=null; vDrag=null; eraseH=null;
+  tempEdge.style.display = 'none';
+  render(); setStatus();
+}
+
+function loadExample(name) {
+  if (!name) return;
+  graph.loadPreset(name); sel=null; eraseH=null;
+  document.getElementById('exampleSel').value = '';
+  render(); setStatus();
+}
+
+// ── Export helpers ─────────────────────────────────────────────────────────────
+
+// Build a clean SVG clone with no UI-state decoration (no hover rings, no temp edge, no hint)
+function buildExportSvg() {
+  // Temporarily clear all interactive state and re-render cleanly
+  const savedSel = sel, savedEraseH = eraseH, savedHoverV = hoverV, savedEDrag = eDrag;
+  sel = null; eraseH = null; hoverV = null; eDrag = null;
+  renderEdges();
+  renderVerts();
+
+  const clone = svg.cloneNode(true);
+
+  // Restore state
+  sel = savedSel; eraseH = savedEraseH; hoverV = savedHoverV; eDrag = savedEDrag;
+  renderEdges();
+  renderVerts();
+
+  // Strip UI-only elements from clone
+  const strip = ['#hint', '#tempEdge'];
+  strip.forEach(id => { const el = clone.querySelector(id); if (el) el.remove(); });
+
+  // Remove inline cursor styles (artefact of interactive rendering)
+  clone.querySelectorAll('[style]').forEach(el => {
+    el.style.cursor = '';
+    if (!el.getAttribute('style').trim()) el.removeAttribute('style');
+  });
+
+  // Explicit dimensions
+  const vb = svg.viewBox.baseVal;
+  clone.setAttribute('width', vb.width);
+  clone.setAttribute('height', vb.height);
+
+  // White background rect (inserted before everything)
+  if (document.getElementById('whiteBg').checked) {
+    const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    bg.setAttribute('x', 0); bg.setAttribute('y', 0);
+    bg.setAttribute('width', vb.width); bg.setAttribute('height', vb.height);
+    bg.setAttribute('fill', '#ffffff');
+    clone.insertBefore(bg, clone.firstChild);
+  }
+
+  return clone;
+}
+
+function downloadSVG() {
+  const clone  = buildExportSvg();
+  const svgStr = '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(clone);
+  const blob   = new Blob([svgStr], { type: 'image/svg+xml' });
+  const url    = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'graph.svg'; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function copyToClipboard() {
+  const clone  = buildExportSvg();
+  const scale  = parseInt(document.getElementById('scaleSelect').value) || 2;
+  const vb     = svg.viewBox.baseVal;
+  const svgStr = new XMLSerializer().serializeToString(clone);
+  const blob   = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+  const url    = URL.createObjectURL(blob);
+  const btn    = document.getElementById('copyBtn');
+
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width  = vb.width  * scale;
+    canvas.height = vb.height * scale;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.drawImage(img, 0, 0);
+    URL.revokeObjectURL(url);
+
+    canvas.toBlob(pngBlob => {
+      navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })])
+        .then(() => {
+          btn.textContent = '✓ Copied!';
+          btn.classList.add('copied');
+          setTimeout(() => {
+            btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M9 5V3.5A1.5 1.5 0 007.5 2H3.5A1.5 1.5 0 002 3.5v4A1.5 1.5 0 003.5 9H5"/></svg> Copy PNG`;
+            btn.classList.remove('copied');
+          }, 2000);
+        })
+        .catch(() => {
+          btn.textContent = '✗ Failed — try Download';
+          btn.style.color = 'var(--red)';
+          setTimeout(() => {
+            btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M9 5V3.5A1.5 1.5 0 007.5 2H3.5A1.5 1.5 0 002 3.5v4A1.5 1.5 0 003.5 9H5"/></svg> Copy PNG`;
+            btn.style.color = '';
+          }, 3000);
+        });
+    }, 'image/png');
+  };
+  img.onerror = () => URL.revokeObjectURL(url);
+  img.src = url;
+}
+
+function downloadPNG() {
+  const clone  = buildExportSvg();
+  const scale  = parseInt(document.getElementById('scaleSelect').value) || 2;
+  const vb     = svg.viewBox.baseVal;
+  const svgStr = new XMLSerializer().serializeToString(clone);
+  const blob   = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+  const url    = URL.createObjectURL(blob);
+
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width  = vb.width  * scale;
+    canvas.height = vb.height * scale;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.drawImage(img, 0, 0);
+    URL.revokeObjectURL(url);
+    const a = document.createElement('a');
+    a.href     = canvas.toDataURL('image/png');
+    a.download = 'graph.png';
+    a.click();
+  };
+  img.onerror = () => URL.revokeObjectURL(url);
+  img.src = url;
+}
+
+// ── Import from text ───────────────────────────────────────────────────────────
+let importMode = 'edge';
+
+function toggleImport() {
+  const body = document.getElementById('importBody');
+  const btn  = document.getElementById('importToggle');
+  const open = body.style.display === 'none';
+  body.style.display = open ? '' : 'none';
+  btn.classList.toggle('open', open);
+}
+
+function setImportMode(m) {
+  importMode = m;
+  ['edge', 'adj', 'mat'].forEach(t => {
+    document.getElementById('itab-' + t).classList.toggle('active', t === m);
+    document.getElementById('ihint-' + t).style.display = t === m ? '' : 'none';
+  });
+  document.getElementById('importText').value = '';
+  document.getElementById('importErr').style.display = 'none';
+}
+
+function importGraph() {
+  const text  = document.getElementById('importText').value;
+  const errEl = document.getElementById('importErr');
+  if (!text.trim()) { errEl.style.display = 'none'; return; }
+
+  let result;
+  if (importMode === 'edge') result = GraphParsers.parseEdgeList(text);
+  else if (importMode === 'adj') result = GraphParsers.parseAdjacencyList(text);
+  else result = GraphParsers.parseAdjacencyMatrix(text);
+
+  if (!result.ok && result.vertices.length === 0) {
+    errEl.style.display = '';
+    errEl.textContent = result.errors[0] || 'Could not parse — check the format.';
+    return;
+  }
+
+  errEl.style.display = 'none';
+  sel = null; eraseH = null; eDrag = null;
+  GraphParsers.applyToGraph(graph, result);
+  render();
+  setMode('select');
+  setStatus('Graph loaded from text.', 's-ok');
+}
+
+render();
+</script>
+</body>
+</html>

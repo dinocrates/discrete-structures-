@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Game Map Spanning Tree Builder</title>
+  <link rel="stylesheet" href="../shared/graph-style.css" />
+  <style>
+    :root { --course-red:#b42318; --route:#344054; --success:#067647; }
+    body { padding:1rem; min-width:320px; }
+    .gt-page { max-width:1180px; padding-bottom:2rem; }
+    .gt-header { display:grid; grid-template-columns:1fr auto; gap:1rem; align-items:end; }
+    .gt-title { font-size:clamp(20px,3vw,28px); }
+    .mission { max-width:790px; font-size:15px; color:var(--text2); line-height:1.55; }
+    .mission strong { color:var(--course-red); }
+    .legend { display:flex; gap:12px; flex-wrap:wrap; color:var(--text2); font-size:12px; white-space:nowrap; }
+    .legend span { display:flex; gap:5px; align-items:center; }
+    .legend-node { width:16px; height:16px; border:2px solid var(--route); border-radius:50%; background:#fff; }
+    .legend-edge { width:22px; border-top:3px solid var(--route); }
+    .workspace { display:grid; grid-template-columns:minmax(0,7fr) minmax(250px,3fr); grid-template-areas:'map status' 'controls status' 'feedback status'; gap:12px 16px; align-items:start; }
+    .map-wrap { grid-area:map; position:relative; overflow:hidden; border:2px solid #cbd5e1; border-radius:10px; background-color:#f8fafc; background-image:linear-gradient(#e9eef2 1px,transparent 1px),linear-gradient(90deg,#e9eef2 1px,transparent 1px); background-size:28px 28px; transition:border-color .2s,box-shadow .2s; }
+    .map-wrap.success { border-color:var(--success); box-shadow:0 0 0 4px #d1fadf; }
+    svg { display:block; width:100%; height:auto; min-height:390px; touch-action:manipulation; }
+    .route-visible { fill:none; stroke:var(--route); stroke-width:8; stroke-linecap:round; transition:opacity .15s,stroke .15s; }
+    .route.removed .route-visible { stroke:#7c8798; stroke-width:6; stroke-dasharray:14 12; opacity:.55; }
+    .route-hit { fill:none; stroke:transparent; stroke-width:44; cursor:pointer; }
+    .route:focus { outline:none; }
+    .route:focus .route-visible { stroke:var(--course-red); filter:drop-shadow(0 0 5px #fff); stroke-width:12; }
+    .route.hint .route-visible { stroke:#b54708; stroke-width:13; }
+    .map-wrap.success .route.active .route-visible { stroke:var(--success); }
+    .room-body { fill:#fff; stroke:#344054; stroke-width:4; }
+    .room.spawn .room-body { fill:#fff1f0; stroke:var(--course-red); }
+    .room.boss_gate .room-body { fill:#fffaeb; stroke:#b54708; }
+    .room.disconnected .room-body { fill:url(#warningPattern); stroke:var(--course-red); stroke-width:7; stroke-dasharray:8 5; }
+    .room text { pointer-events:none; text-anchor:middle; font-family:var(--sans); fill:#101828; font-weight:700; font-size:19px; paint-order:stroke; stroke:#fff; stroke-width:5px; stroke-linejoin:round; }
+    .room .room-icon { font-size:17px; fill:var(--course-red); stroke-width:4px; }
+    .status { grid-area:status; border-left:4px solid var(--course-red); padding:4px 0 4px 16px; }
+    .status h2 { font-size:16px; margin-bottom:10px; }
+    .status-list { margin:0; }
+    .status-row { display:grid; grid-template-columns:1fr auto; gap:12px; padding:10px 0; border-bottom:1px solid var(--border); }
+    .status-row dt { color:var(--text2); font-size:13px; }
+    .status-row dd { font-weight:700; font-size:14px; text-align:right; }
+    .status-row dd::before { margin-right:6px; }
+    .value-good::before { content:'✓'; color:var(--success); }
+    .value-warn::before { content:'!'; color:var(--course-red); border:1.5px solid currentColor; border-radius:50%; width:16px; height:16px; line-height:13px; display:inline-block; text-align:center; }
+    .value-neutral::before { content:'•'; color:#667085; }
+    .equation { display:none; margin-top:14px; padding:12px; background:#ecfdf3; color:#05603a; border:1px solid #abefc6; border-radius:7px; text-align:center; font-weight:800; }
+    .equation.show { display:block; }
+    .controls { grid-area:controls; display:flex; gap:8px; flex-wrap:wrap; }
+    .control { min-height:44px; padding:8px 16px; border:1.5px solid #98a2b3; border-radius:6px; background:#fff; color:#101828; font:600 14px var(--sans); cursor:pointer; }
+    .control:hover:not(:disabled) { background:#f2f4f7; border-color:#475467; }
+    .control:focus-visible, summary:focus-visible { outline:3px solid #84caff; outline-offset:2px; }
+    .control:disabled { opacity:.45; cursor:not-allowed; }
+    .feedback { grid-area:feedback; min-height:58px; padding:12px 14px; border:1px solid var(--pborder); border-radius:7px; background:var(--pbg); color:#1849a9; font-size:14px; }
+    .feedback.error { background:#fef3f2; border-color:#fecdca; color:#912018; }
+    .feedback.success { background:#ecfdf3; border-color:#abefc6; color:#05603a; }
+    .hint-text { display:block; margin-top:5px; font-weight:700; color:#93370d; }
+    details { margin-top:18px; border-top:1px solid var(--border); padding-top:12px; }
+    summary { width:max-content; cursor:pointer; font-weight:700; color:#344054; min-height:44px; padding:9px 2px; }
+    .definitions { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:8px 18px; padding:4px 0 10px; color:var(--text2); font-size:14px; }
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+    @media (max-width:760px) {
+      body { padding:.5rem; }
+      .gt-page { padding:.5rem; }
+      .gt-header { grid-template-columns:1fr; }
+      .workspace { grid-template-columns:1fr; grid-template-areas:'status' 'map' 'controls' 'feedback'; }
+      .status { border-left:0; border-top:4px solid var(--course-red); padding:10px 0 0; }
+      .status-list { display:grid; grid-template-columns:repeat(5,1fr); gap:5px; }
+      .status-row { display:block; border:0; text-align:center; padding:5px 2px; }
+      .status-row dt { font-size:11px; min-height:34px; }
+      .status-row dd { text-align:center; font-size:12px; white-space:nowrap; }
+      .status-row dd::before { display:block; margin:0 auto 2px; }
+      svg { min-height:0; }
+      .room text { font-size:21px; }
+      .controls { display:grid; grid-template-columns:repeat(3,1fr); }
+      .control { padding:8px 5px; }
+    }
+    @media (max-width:360px) { .mission { font-size:14px; } .legend { gap:7px; } .status-row dt { font-size:10px; } }
+    @media (prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto!important; transition:none!important; animation:none!important; } }
+  </style>
+</head>
+<body>
+<main class="gt-page">
+  <a class="gt-back" href="../index.html">← Graph Theory Tools</a>
+  <header class="gt-header">
+    <div>
+      <div class="gt-badge">§2.1 · TREES</div>
+      <h1 class="gt-title">Game Map Spanning Tree Builder</h1>
+      <p class="mission"><strong>Mission: Eliminate the Routing Loops.</strong> The game server is sending map updates through every doorway. Redundant routes are creating loops and duplicate messages. Remove unnecessary routes while keeping every location reachable from Spawn.</p>
+    </div>
+    <div class="legend" aria-label="Map legend"><span><i class="legend-node" aria-hidden="true"></i> Room = Vertex</span><span><i class="legend-edge" aria-hidden="true"></i> Route = Edge</span></div>
+  </header>
+
+  <section class="workspace" aria-label="Spanning tree activity">
+    <div class="map-wrap" id="mapWrap">
+      <svg id="map" viewBox="20 55 900 610" role="img" aria-labelledby="mapTitle mapDesc">
+        <title id="mapTitle">Interactive game room graph</title>
+        <desc id="mapDesc">Eight rooms connected by twelve toggleable undirected routes. Select a route to remove or restore it.</desc>
+        <defs><pattern id="warningPattern" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="12" height="12" fill="#fff"/><rect width="4" height="12" fill="#fee4e2"/></pattern></defs>
+        <g id="edgeLayer"></g><g id="vertexLayer"></g>
+      </svg>
+    </div>
+
+    <aside class="status" aria-labelledby="statusTitle">
+      <h2 id="statusTitle">Mission status</h2>
+      <dl class="status-list">
+        <div class="status-row"><dt>Vertices</dt><dd id="verticesValue" class="value-neutral">8</dd></div>
+        <div class="status-row"><dt>Active Routes</dt><dd id="edgesValue" class="value-neutral">12</dd></div>
+        <div class="status-row"><dt>Connected</dt><dd id="connectedValue">Yes</dd></div>
+        <div class="status-row"><dt>Cycles</dt><dd id="cyclesValue">Present</dd></div>
+        <div class="status-row"><dt>Spanning Tree</dt><dd id="treeValue">Not yet</dd></div>
+      </dl>
+      <div class="equation" id="equation">8 vertices − 1 = 7 edges</div>
+    </aside>
+
+    <div class="controls" aria-label="Map controls">
+      <button class="control" id="undoButton" type="button" disabled><span aria-hidden="true">↶</span> Undo</button>
+      <button class="control" id="hintButton" type="button"><span aria-hidden="true">💡</span> Hint</button>
+      <button class="control" id="resetButton" type="button"><span aria-hidden="true">↺</span> Reset</button>
+    </div>
+
+    <div class="feedback" id="feedback"></div>
+  </section>
+
+  <details>
+    <summary>Definitions</summary>
+    <div class="definitions">
+      <p><strong>Tree:</strong> A connected graph with no cycles.</p>
+      <p><strong>Spanning tree:</strong> A subgraph that includes every vertex and is a tree.</p>
+      <p><strong>Connected:</strong> A path exists between every pair of vertices.</p>
+      <p><strong>Cycle:</strong> A path that begins and ends at the same vertex without repeating other vertices.</p>
+      <p><strong>Forest:</strong> An acyclic graph that is not necessarily connected.</p>
+    </div>
+  </details>
+  <div id="liveRegion" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+</main>
+
+<script src="graph-logic.js"></script>
+<script>
+(function () {
+  'use strict';
+  const { VERTICES, EDGES, analyze, getHint, createHistory } = GameMapGraph;
+  const state = createHistory();
+  const labels = new Map(VERTICES.map(vertex => [vertex.id, vertex.label]));
+  const edgeLayer = document.getElementById('edgeLayer');
+  const vertexLayer = document.getElementById('vertexLayer');
+  const feedback = document.getElementById('feedback');
+  const liveRegion = document.getElementById('liveRegion');
+  const undoButton = document.getElementById('undoButton');
+  let hintId = null;
+
+  function svg(tag, attributes) {
+    const element = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    for (const [name, value] of Object.entries(attributes || {})) element.setAttribute(name, value);
+    return element;
+  }
+
+  function routeName(edge) { return `${labels.get(edge.from)} to ${labels.get(edge.to)}`; }
+
+  function buildMap() {
+    for (const edge of EDGES) {
+      const from = VERTICES.find(vertex => vertex.id === edge.from);
+      const to = VERTICES.find(vertex => vertex.id === edge.to);
+      const group = svg('g', { class:'route', tabindex:'0', role:'button', 'data-edge-id':edge.id });
+      group.append(svg('line', { class:'route-visible', x1:from.x, y1:from.y, x2:to.x, y2:to.y, 'aria-hidden':'true' }));
+      group.append(svg('line', { class:'route-hit', x1:from.x, y1:from.y, x2:to.x, y2:to.y, 'aria-hidden':'true' }));
+      group.addEventListener('click', () => toggle(edge.id));
+      group.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggle(edge.id); }
+      });
+      edgeLayer.append(group);
+    }
+    for (const vertex of VERTICES) {
+      const group = svg('g', { class:`room ${vertex.id}`, 'data-vertex-id':vertex.id, 'aria-hidden':'true' });
+      group.append(svg('circle', { class:'room-body', cx:vertex.x, cy:vertex.y, r:'54' }));
+      const text = svg('text', { x:vertex.x, y:vertex.y + (vertex.id === 'spawn' || vertex.id === 'boss_gate' ? 8 : 6) });
+      const words = vertex.label.split(' ');
+      if (words.length === 1) text.textContent = vertex.label;
+      else words.forEach((word, index) => {
+        const span = svg('tspan', { x:vertex.x, dy:index ? '22' : '-8' }); span.textContent = word; text.append(span);
+      });
+      group.append(text);
+      if (vertex.id === 'spawn' || vertex.id === 'boss_gate') {
+        const icon = svg('text', { class:'room-icon', x:vertex.x, y:vertex.y - 27 });
+        icon.textContent = vertex.id === 'spawn' ? '▶ START' : '◆ GOAL'; group.append(icon);
+      }
+      vertexLayer.append(group);
+    }
+  }
+
+  function toggle(id) {
+    const edge = EDGES.find(item => item.id === id);
+    const wasActive = state.activeIds.has(id);
+    state.toggle(id); hintId = null;
+    render(`${wasActive ? 'Removed' : 'Restored'} route ${routeName(edge)}.`);
+  }
+
+  function stateMessage(result) {
+    if (result.isConnected && result.hasCycle) return 'Every room is reachable, but at least one routing loop remains.';
+    if (!result.isConnected && result.hasCycle) return 'Some rooms are unreachable, and the remaining map still contains a loop. Restore a route to reconnect the highlighted rooms.';
+    if (!result.isConnected) return 'The map has no loops, but it is now a forest. Restore a route to reconnect the highlighted rooms.';
+    return 'Mission complete. Every room is reachable, no routing loops remain, and 8 vertices are connected by exactly 7 edges.';
+  }
+
+  function render(actionAnnouncement) {
+    const activeIds = state.activeIds;
+    const result = analyze(activeIds);
+    document.querySelectorAll('.route').forEach(group => {
+      const id = group.dataset.edgeId;
+      const edge = EDGES.find(item => item.id === id);
+      const active = activeIds.has(id);
+      group.classList.toggle('active', active); group.classList.toggle('removed', !active); group.classList.toggle('hint', id === hintId);
+      group.setAttribute('aria-pressed', String(active));
+      group.setAttribute('aria-label', `Route from ${routeName(edge)}, ${active ? 'active' : 'removed'}`);
+    });
+    document.querySelectorAll('.room').forEach(group => group.classList.toggle('disconnected', result.unreachable.includes(group.dataset.vertexId)));
+    document.getElementById('edgesValue').textContent = result.activeEdgeCount;
+    setValue('connectedValue', result.isConnected ? 'Yes' : 'No', result.isConnected);
+    setValue('cyclesValue', result.hasCycle ? 'Present' : 'None', !result.hasCycle);
+    setValue('treeValue', result.isSpanningTree ? 'Yes' : 'Not yet', result.isSpanningTree);
+    document.getElementById('mapWrap').classList.toggle('success', result.isSpanningTree);
+    document.getElementById('equation').classList.toggle('show', result.isSpanningTree);
+    undoButton.disabled = !state.canUndo;
+    feedback.className = `feedback${result.isSpanningTree ? ' success' : !result.isConnected ? ' error' : ''}`;
+    feedback.innerHTML = `<span>${stateMessage(result)}</span>`;
+    if (hintId) {
+      const hint = EDGES.find(edge => edge.id === hintId);
+      const hintText = document.createElement('span'); hintText.className = 'hint-text';
+      hintText.textContent = result.isConnected ? `Hint: The ${routeName(hint)} route is part of a cycle.` : `Hint: Restore the ${routeName(hint)} route to join separate areas.`;
+      feedback.append(hintText);
+    }
+    const unreachableText = result.unreachable.length ? ` Unreachable rooms: ${result.unreachable.map(id => labels.get(id)).join(', ')}.` : '';
+    liveRegion.textContent = `${actionAnnouncement || ''} ${stateMessage(result)}${unreachableText}`.trim();
+  }
+
+  function setValue(id, text, good) {
+    const element = document.getElementById(id); element.textContent = text;
+    element.className = good ? 'value-good' : 'value-warn';
+  }
+
+  undoButton.addEventListener('click', () => { if (state.undo()) { hintId = null; render('Undid the most recent route change.'); } });
+  document.getElementById('resetButton').addEventListener('click', () => { state.reset(); hintId = null; render('Map reset. All twelve routes are active.'); });
+  document.getElementById('hintButton').addEventListener('click', () => {
+    const hint = getHint(state.activeIds); hintId = hint ? hint.id : null;
+    render(hint ? `Hint selected: ${routeName(hint)}.` : 'No route hint is available in the current map.');
+    if (hint) document.querySelector(`[data-edge-id="${hint.id}"]`).focus();
+  });
+
+  buildMap(); render('Map ready. Eight rooms and twelve active routes.');
+})();
+</script>
+</body>
+</html>
