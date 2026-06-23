@@ -3,7 +3,7 @@
 const GraphParsers = (() => {
 
   // ── Edge List ─────────────────────────────────────────────────────────────
-  // Format: one edge per line: "A B" or "A-B" or "A,B"
+  // Format: one edge per line: "A B" or "A-B" or "A,B"; one label keeps an isolated vertex.
   function parseEdgeList(text) {
     const errors = [];
     const vertices = new Set();
@@ -17,8 +17,12 @@ const GraphParsers = (() => {
       const line = lines[i];
       // Split on whitespace, comma, or hyphen (not inside labels)
       const parts = line.split(/[\s,\-]+/).filter(Boolean);
+      if (parts.length === 1) {
+        vertices.add(parts[0]);
+        continue;
+      }
       if (parts.length !== 2) {
-        errors.push(`Line ${i + 1}: expected two vertex labels, got "${line}".`);
+        errors.push(`Line ${i + 1}: expected one isolated vertex or two edge endpoints, got "${line}".`);
         continue;
       }
       const [u, v] = parts;
@@ -89,7 +93,7 @@ const GraphParsers = (() => {
   //   0 1 1 0
   //   1 0 1 0
   //   ...
-  function parseAdjacencyMatrix(text) {
+  function parseAdjacencyMatrix(text, options = {}) {
     const errors = [];
     const lines = text.trim().split('\n').map(l => l.trim()).filter(Boolean);
     if (!lines.length) return { ok: false, errors: ['Input is empty.'], vertices: [], edges: [] };
@@ -137,10 +141,12 @@ const GraphParsers = (() => {
       }
     }
 
-    // Diagonal zeros (no self-loops)
-    for (let i = 0; i < n; i++) {
-      if (rows[i][i] !== 0) {
-        errors.push(`Diagonal entry at row ${i + 1} (vertex ${labels[i]}) is 1. Self-loops are not allowed in simple graphs.`);
+    // Diagonal zeros unless the caller explicitly supports self-loops.
+    if (!options.allowLoops) {
+      for (let i = 0; i < n; i++) {
+        if (rows[i][i] !== 0) {
+          errors.push(`Diagonal entry at row ${i + 1} (vertex ${labels[i]}) is 1. Self-loops are not allowed in simple graphs.`);
+        }
       }
     }
 
@@ -155,10 +161,10 @@ const GraphParsers = (() => {
 
     if (errors.length) return { ok: false, errors, vertices: labels, edges: [] };
 
-    // Build edges from upper triangle
+    // Build edges from the diagonal/upper triangle.
     const edges = [];
     for (let i = 0; i < n; i++) {
-      for (let j = i + 1; j < n; j++) {
+      for (let j = options.allowLoops ? i : i + 1; j < n; j++) {
         if (rows[i][j] === 1) edges.push({ source: labels[i], target: labels[j] });
       }
     }

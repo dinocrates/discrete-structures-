@@ -161,6 +161,26 @@
 
     .import-err { margin-top: 6px; font-size: 11px; color: var(--red); }
 
+    .click-matrix-builder { display: none; }
+    .matrix-label-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 9px; }
+    .matrix-label-row label { font-size: 12px; font-weight: 600; color: var(--text2); }
+    .matrix-label-input {
+      flex: 1; min-width: 180px; padding: 7px 9px;
+      border: 1.5px solid var(--border); border-radius: var(--rs);
+      font: 13px var(--mono); outline: none;
+    }
+    .matrix-label-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--pbg); }
+    .click-matrix-wrap { overflow-x: auto; max-width: 100%; }
+    .click-matrix { border-collapse: collapse; font: 12px var(--mono); }
+    .click-matrix th { min-width: 44px; height: 38px; border: 1px solid var(--border); background: var(--bg2); }
+    .matrix-toggle {
+      width: 46px; height: 44px; border: 1px solid var(--border);
+      background: #fff; color: var(--text2); font: 700 13px var(--mono); cursor: pointer;
+    }
+    .matrix-toggle[aria-pressed=true] { background: #dbeafe; color: #1d4ed8; box-shadow: inset 0 0 0 2px #2563eb; }
+    .matrix-toggle:focus-visible { outline: 3px solid #93c5fd; outline-offset: -3px; }
+    .matrix-toggle.diagonal { background: #f8fafc; color: #475569; cursor: pointer; border-style: dashed; }
+
     #ghost {
       position: fixed; width: 44px; height: 44px; border-radius: 50%;
       background: #fff; border: 2.5px solid var(--primary);
@@ -259,6 +279,9 @@
         <filter id="vshadow" x="-30%" y="-30%" width="160%" height="160%">
           <feDropShadow dx="0" dy="1" stdDeviation="2.5" flood-color="#00000015"/>
         </filter>
+        <marker id="loopArrow" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+          <path d="M0,0 L9,3.5 L0,7 Z" fill="context-stroke" />
+        </marker>
       </defs>
       <g id="layer-edges"></g>
       <line id="tempEdge" stroke="#2563eb" stroke-width="2" stroke-dasharray="8,5"
@@ -316,20 +339,30 @@
       <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M3 1l4 4-4 4"/>
       </svg>
-      Load from text
+      Live text representation / load from text
     </button>
     <div class="import-body" id="importBody" style="display:none">
       <div class="import-tabs">
         <button class="import-tab active" id="itab-edge" onclick="setImportMode('edge')">Edge List</button>
         <button class="import-tab" id="itab-adj"  onclick="setImportMode('adj')">Adj. List</button>
         <button class="import-tab" id="itab-mat"  onclick="setImportMode('mat')">Matrix</button>
+        <button class="import-tab" id="itab-grid" onclick="setImportMode('grid')">Click Matrix</button>
       </div>
 
-      <div id="ihint-edge" class="import-hint">One edge per line: <code>A B</code> or <code>A, B</code></div>
+      <div id="ihint-edge" class="import-hint">One edge per line: <code>A B</code> or <code>A, B</code>. Use one label, such as <code>C</code>, for an isolated vertex.</div>
       <div id="ihint-adj"  class="import-hint" style="display:none">Vertex then neighbors: <code>A: B, C</code> — list every vertex, even isolated ones.</div>
-      <div id="ihint-mat"  class="import-hint" style="display:none">Optional first line: <code>Labels: A B C</code> — then the 0/1 matrix, one row per line.</div>
+      <div id="ihint-mat"  class="import-hint" style="display:none">Optional first line: <code>Labels: A B C</code> — then the symmetric 0/1 matrix. A diagonal 1 creates a self-loop.</div>
+
+      <div id="ihint-grid" class="import-hint" style="display:none">Enter labels, then click cells to toggle connections. Off-diagonal cells mirror automatically; diagonal cells create self-loops.</div>
 
       <textarea class="import-textarea" id="importText" placeholder="A B&#10;A C&#10;B C" oninput="importGraph()"></textarea>
+      <div class="click-matrix-builder" id="clickMatrixBuilder">
+        <div class="matrix-label-row">
+          <label for="matrixLabels">Vertex labels</label>
+          <input class="matrix-label-input" id="matrixLabels" placeholder="A B C D" oninput="updateMatrixLabels()" />
+        </div>
+        <div class="click-matrix-wrap" id="clickMatrixWrap"></div>
+      </div>
       <div class="import-err" id="importErr" style="display:none"></div>
     </div>
   </div>
@@ -382,7 +415,7 @@ const GRAPH_COLORS = {
 };
 
 // ── State ──────────────────────────────────────────────────────────────────────
-const graph = new Graph();
+const graph = new Graph({ allowLoops: true });
 let mode    = 'select';
 let sel     = null;
 let vDrag   = null;
@@ -421,9 +454,32 @@ function edgeNear(x, y) {
   for (const e of graph.edges) {
     const s = graph.vertices.find(v => v.id === e.source);
     const t = graph.vertices.find(v => v.id === e.target);
+    if (s && t && e.source === e.target && pointNearLoop(x, y, s)) return e;
     if (s && t && ptToSeg(x, y, s.x, s.y, t.x, t.y) < 10) return e;
   }
   return null;
+}
+
+function loopPath(vertex) {
+  return `M${vertex.x-15},${vertex.y-18} C${vertex.x-68},${vertex.y-92} ${vertex.x+68},${vertex.y-92} ${vertex.x+15},${vertex.y-18}`;
+}
+
+function pointNearLoop(px, py, vertex) {
+  const p0 = {x:vertex.x-15, y:vertex.y-18};
+  const p1 = {x:vertex.x-68, y:vertex.y-92};
+  const p2 = {x:vertex.x+68, y:vertex.y-92};
+  const p3 = {x:vertex.x+15, y:vertex.y-18};
+  let previous = p0;
+  for (let step = 1; step <= 24; step++) {
+    const t = step / 24, u = 1 - t;
+    const current = {
+      x: u*u*u*p0.x + 3*u*u*t*p1.x + 3*u*t*t*p2.x + t*t*t*p3.x,
+      y: u*u*u*p0.y + 3*u*u*t*p1.y + 3*u*t*t*p2.y + t*t*t*p3.y
+    };
+    if (ptToSeg(px, py, previous.x, previous.y, current.x, current.y) < 12) return true;
+    previous = current;
+  }
+  return false;
 }
 
 function ptToSeg(px, py, ax, ay, bx, by) {
@@ -483,8 +539,8 @@ function setStatus(msg, cls) {
   } else if (mode === 'edge') {
     statusEl.className = 'status-bar s-edge';
     statusEl.textContent = eDrag
-      ? 'Click another vertex to connect it — or click the source again to cancel.'
-      : 'EDGE — click a vertex to start drawing an edge.';
+      ? 'Click another vertex to connect it, or click the source again to add a self-loop. Escape cancels.'
+      : 'EDGE — click a vertex to start an edge; clicking it again creates a self-loop.';
   } else if (mode === 'place') {
     statusEl.className = 'status-bar s-place';
     statusEl.textContent = 'PLACE VERTEX — click anywhere on the canvas to place a vertex. Escape to cancel.';
@@ -518,6 +574,7 @@ function render() {
   document.getElementById('exportStats').textContent =
     `${graph.vertices.length} ${graph.vertices.length===1?'vertex':'vertices'} · ` +
     `${graph.edges.length} ${graph.edges.length===1?'edge':'edges'}`;
+  syncImportTextFromGraph();
 }
 
 function renderEdges() {
@@ -531,7 +588,13 @@ function renderEdges() {
     const isErase = eraseH?.type === 'edge' && eraseH.id === e.id;
     const edgeColor = e.color ? GRAPH_COLORS[e.color] : null;
 
-    const hit = mkel('line', { x1:s.x, y1:s.y, x2:t.x, y2:t.y, stroke:'transparent', 'stroke-width':20 });
+    const isLoop = e.source === e.target;
+    const geometry = isLoop
+      ? { d: loopPath(s) }
+      : { x1:s.x, y1:s.y, x2:t.x, y2:t.y };
+    const hit = mkel(isLoop ? 'path' : 'line', {
+      ...geometry, fill:'none', stroke:'transparent', 'stroke-width':24
+    });
     hit.addEventListener('mousedown', ev => {
       if (mode === 'select') { ev.stopPropagation(); setSel('edge', e.id); }
       if (mode === 'color') {
@@ -543,17 +606,19 @@ function renderEdges() {
     });
     layerE.appendChild(hit);
 
-    const line = mkel('line', {
-      x1:s.x, y1:s.y, x2:t.x, y2:t.y,
+    const line = mkel(isLoop ? 'path' : 'line', {
+      ...geometry, fill:'none',
       stroke: isErase ? '#dc2626' : isSel ? '#2563eb' : edgeColor?.stroke || '#64748b',
       'stroke-width': isErase ? 3.5 : isSel ? 3 : edgeColor ? 4 : 2,
       'stroke-linecap': 'round', 'pointer-events': 'none',
-      'stroke-dasharray': isErase ? '7,4' : 'none'
+      'stroke-dasharray': isErase ? '7,4' : 'none',
+      'marker-end': isLoop ? 'url(#loopArrow)' : 'none'
     });
     layerE.appendChild(line);
 
     if (isErase) {
-      const mx = (s.x + t.x) / 2, my = (s.y + t.y) / 2;
+      const mx = isLoop ? s.x : (s.x + t.x) / 2;
+      const my = isLoop ? s.y - 70 : (s.y + t.y) / 2;
       layerE.appendChild(mkel('circle', { cx:mx, cy:my, r:12, fill:'#fff', stroke:'#dc2626', 'stroke-width':1.5, 'pointer-events':'none' }));
       const icon = mkel('text', { x:mx, y:my+1, 'text-anchor':'middle', 'dominant-baseline':'central', 'font-size':14, fill:'#dc2626', 'pointer-events':'none', 'font-family':'sans-serif' });
       icon.textContent = '✂';
@@ -768,9 +833,11 @@ function onVertexDown(ev, vid) {
       tempEdge.style.display = '';
       render(); setStatus();
     } else if (eDrag.srcId === vid) {
+      const r = graph.addEdge(vid, vid);
       eDrag = null; hoverV = null;
       tempEdge.style.display = 'none';
-      render(); setStatus();
+      render();
+      setStatus(r.error === 'duplicate' ? 'Self-loop already exists.' : 'Self-loop added.', r.error ? 's-warn' : 's-ok');
     } else {
       const r = graph.addEdge(eDrag.srcId, vid);
       eDrag = null; hoverV = null;
@@ -981,27 +1048,209 @@ function toggleImport() {
   const open = body.style.display === 'none';
   body.style.display = open ? '' : 'none';
   btn.classList.toggle('open', open);
+  if (open) syncImportTextFromGraph(true);
 }
 
 function setImportMode(m) {
   importMode = m;
-  ['edge', 'adj', 'mat'].forEach(t => {
+  ['edge', 'adj', 'mat', 'grid'].forEach(t => {
     document.getElementById('itab-' + t).classList.toggle('active', t === m);
     document.getElementById('ihint-' + t).style.display = t === m ? '' : 'none';
   });
-  document.getElementById('importText').value = '';
+  document.getElementById('importText').style.display = m === 'grid' ? 'none' : '';
+  document.getElementById('clickMatrixBuilder').style.display = m === 'grid' ? 'block' : 'none';
   document.getElementById('importErr').style.display = 'none';
+  syncImportTextFromGraph(true);
+}
+
+function graphAsText(format = importMode) {
+  const labelById = new Map(graph.vertices.map(v => [v.id, v.label]));
+
+  if (format === 'edge') {
+    const lines = graph.edges.map(e => `${labelById.get(e.source)} ${labelById.get(e.target)}`);
+    const incident = new Set(graph.edges.flatMap(e => [e.source, e.target]));
+    for (const v of graph.vertices) {
+      if (!incident.has(v.id)) lines.push(v.label);
+    }
+    return lines.join('\n');
+  }
+
+  if (format === 'adj') {
+    const adjacency = graph.getAdjacencyList();
+    return graph.vertices.map(v =>
+      `${v.label}: ${(adjacency[v.id] || []).map(id => labelById.get(id)).join(', ')}`
+    ).join('\n');
+  }
+
+  const { ids, mat } = graph.getAdjacencyMatrix();
+  if (!ids.length) return '';
+  const labels = ids.map(id => labelById.get(id));
+  const rows = ids.map(u => ids.map(v => mat[u][v]).join(' '));
+  return [`Labels: ${labels.join(' ')}`, ...rows].join('\n');
+}
+
+function syncImportTextFromGraph(force = false) {
+  const textarea = document.getElementById('importText');
+  if (!textarea) return;
+  if (importMode === 'grid') {
+    syncClickMatrixFromGraph(force);
+    return;
+  }
+  if (!force && document.activeElement === textarea) return;
+  textarea.value = graphAsText();
+  document.getElementById('importErr').style.display = 'none';
+}
+
+function syncClickMatrixFromGraph(force = false) {
+  const input = document.getElementById('matrixLabels');
+  if (force || document.activeElement !== input) {
+    input.value = graph.vertices.map(v => v.label).join(' ');
+  }
+  renderClickMatrix();
+  document.getElementById('importErr').style.display = 'none';
+}
+
+function updateMatrixLabels() {
+  const input = document.getElementById('matrixLabels');
+  const errEl = document.getElementById('importErr');
+  const labels = input.value.trim() ? input.value.trim().split(/[\s,]+/).filter(Boolean) : [];
+
+  if (new Set(labels).size !== labels.length) {
+    errEl.style.display = '';
+    errEl.textContent = 'Each vertex label must be unique.';
+    return;
+  }
+  if (labels.some(label => !/^[A-Za-z0-9_]+$/.test(label))) {
+    errEl.style.display = '';
+    errEl.textContent = 'Labels may use letters, numbers, and underscores.';
+    return;
+  }
+  if (labels.length > 12) {
+    errEl.style.display = '';
+    errEl.textContent = 'The click matrix supports up to 12 vertices at once.';
+    return;
+  }
+
+  errEl.style.display = 'none';
+  const keep = new Set(labels);
+  for (const vertex of [...graph.vertices]) {
+    if (!keep.has(vertex.label)) graph.removeVertex(vertex.id);
+  }
+
+  labels.forEach((label, index) => {
+    if (graph.vertices.some(v => v.label === label)) return;
+    const angle = (2 * Math.PI * index / Math.max(labels.length, 1)) - Math.PI / 2;
+    const radius = labels.length <= 1 ? 0 : 150;
+    graph.addVertex(400 + radius * Math.cos(angle), 240 + radius * Math.sin(angle), label);
+  });
+
+  graph.vertices = labels.map(label => graph.vertices.find(v => v.label === label));
+  sel = null; eDrag = null; eraseH = null;
+  render();
+  setStatus(`${labels.length} matrix ${labels.length === 1 ? 'label' : 'labels'} active.`, 's-ok');
+}
+
+function renderClickMatrix() {
+  const wrap = document.getElementById('clickMatrixWrap');
+  const vertices = graph.vertices;
+  if (!vertices.length) {
+    wrap.innerHTML = '<p class="import-hint">Enter labels above to generate matrix rows and columns.</p>';
+    return;
+  }
+
+  const table = document.createElement('table');
+  table.className = 'click-matrix';
+  table.setAttribute('aria-label', 'Clickable adjacency matrix');
+  const head = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  const corner = document.createElement('th');
+  corner.textContent = '—';
+  headRow.appendChild(corner);
+  for (const vertex of vertices) {
+    const th = document.createElement('th');
+    th.scope = 'col';
+    th.textContent = vertex.label;
+    headRow.appendChild(th);
+  }
+  head.appendChild(headRow);
+  table.appendChild(head);
+
+  const body = document.createElement('tbody');
+  vertices.forEach((source, row) => {
+    const tr = document.createElement('tr');
+    const th = document.createElement('th');
+    th.scope = 'row';
+    th.textContent = source.label;
+    tr.appendChild(th);
+    vertices.forEach((target, col) => {
+      const td = document.createElement('td');
+      const button = document.createElement('button');
+      const diagonal = row === col;
+      const active = graph.hasEdge(source.id, target.id);
+      button.className = `matrix-toggle${diagonal ? ' diagonal' : ''}`;
+      button.textContent = active ? '1' : '0';
+      button.dataset.row = row;
+      button.dataset.col = col;
+      button.setAttribute('aria-pressed', String(active));
+      button.setAttribute('aria-label', diagonal
+        ? `Toggle self-loop on ${source.label}. Currently ${active ? 'included' : 'not included'}.`
+        : `Toggle connection between ${source.label} and ${target.label}. Currently ${active ? 'connected' : 'not connected'}.`);
+      button.addEventListener('click', () => toggleMatrixConnection(row, col));
+      button.addEventListener('keydown', clickMatrixKey);
+      td.appendChild(button);
+      tr.appendChild(td);
+    });
+    body.appendChild(tr);
+  });
+  table.appendChild(body);
+  wrap.replaceChildren(table);
+}
+
+function toggleMatrixConnection(row, col) {
+  const source = graph.vertices[row];
+  const target = graph.vertices[col];
+  if (!source || !target) return;
+  const edge = graph.edges.find(e =>
+    (e.source === source.id && e.target === target.id) ||
+    (e.source === target.id && e.target === source.id)
+  );
+  if (edge) graph.removeEdge(edge.id);
+  else graph.addEdge(source.id, target.id);
+  render();
+  setStatus(edge ? `Connection ${source.label}–${target.label} removed.` : `Connection ${source.label}–${target.label} added.`, 's-ok');
+  requestAnimationFrame(() => {
+    document.querySelector(`#clickMatrixWrap [data-row="${row}"][data-col="${col}"]`)?.focus();
+  });
+}
+
+function clickMatrixKey(event) {
+  const key = event.key;
+  if (!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(key)) return;
+  event.preventDefault();
+  const current = event.currentTarget;
+  const row = Number(current.dataset.row);
+  const col = Number(current.dataset.col);
+  const delta = { ArrowLeft:[0,-1], ArrowRight:[0,1], ArrowUp:[-1,0], ArrowDown:[1,0] }[key];
+  const n = graph.vertices.length;
+  let nextRow = Math.max(0, Math.min(n - 1, row + delta[0]));
+  let nextCol = Math.max(0, Math.min(n - 1, col + delta[1]));
+  document.querySelector(`#clickMatrixWrap [data-row="${nextRow}"][data-col="${nextCol}"]`)?.focus();
 }
 
 function importGraph() {
   const text  = document.getElementById('importText').value;
   const errEl = document.getElementById('importErr');
-  if (!text.trim()) { errEl.style.display = 'none'; return; }
+  if (!text.trim()) {
+    errEl.style.display = 'none';
+    graph.clear(); sel = null; eraseH = null; eDrag = null;
+    render(); setStatus('Canvas cleared from text.', 's-ok');
+    return;
+  }
 
   let result;
   if (importMode === 'edge') result = GraphParsers.parseEdgeList(text);
   else if (importMode === 'adj') result = GraphParsers.parseAdjacencyList(text);
-  else result = GraphParsers.parseAdjacencyMatrix(text);
+  else result = GraphParsers.parseAdjacencyMatrix(text, { allowLoops: true });
 
   if (!result.ok && result.vertices.length === 0) {
     errEl.style.display = '';
@@ -1016,6 +1265,9 @@ function importGraph() {
   setMode('select');
   setStatus('Graph loaded from text.', 's-ok');
 }
+
+document.getElementById('importText').addEventListener('blur', () => syncImportTextFromGraph(true));
+document.getElementById('matrixLabels').addEventListener('blur', () => syncClickMatrixFromGraph(true));
 
 render();
 </script>
