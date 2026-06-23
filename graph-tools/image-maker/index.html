@@ -71,6 +71,17 @@
     .canvas-wrap.m-place  svg { cursor: copy; }
     .canvas-wrap.m-drag   svg { cursor: grabbing; }
     .canvas-wrap.m-erase  svg { cursor: crosshair; }
+    .canvas-wrap.m-color  svg { cursor: crosshair; }
+
+    .color-tools { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+    .color-swatch {
+      width: 30px; height: 30px; border: 1.5px solid #64748b; border-radius: 5px;
+      background: var(--swatch); color: #fff; font: 700 10px var(--sans);
+      cursor: pointer; box-shadow: inset 0 0 0 2px rgba(255,255,255,.45);
+    }
+    .color-swatch:hover { transform: translateY(-1px); }
+    .color-swatch.active { outline: 3px solid #93c5fd; outline-offset: 1px; }
+    .color-swatch.clear-color { background: #fff; color: #b91c1c; font-size: 15px; }
 
     /* ── Export bar ── */
     .export-bar {
@@ -192,6 +203,25 @@
       EDGE
     </button>
 
+    <button class="tool-btn" id="btnColor" onclick="setMode('color')" title="Color vertices or edges (C)">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4">
+        <path d="M7 1.5l5 5-5 5-5-5z"/><circle cx="7" cy="6.5" r="1.5" fill="currentColor"/>
+      </svg>
+      COLOR
+    </button>
+
+    <div class="color-tools" id="colorTools" aria-label="Graph color palette">
+      <button class="color-swatch active" style="--swatch:#2167B1" data-color="1" onclick="setPaintColor(1)" title="Color 1: Blue">C1</button>
+      <button class="color-swatch" style="--swatch:#16834F" data-color="2" onclick="setPaintColor(2)" title="Color 2: Green">C2</button>
+      <button class="color-swatch" style="--swatch:#6F42A1" data-color="3" onclick="setPaintColor(3)" title="Color 3: Purple">C3</button>
+      <button class="color-swatch" style="--swatch:#A6192E" data-color="4" onclick="setPaintColor(4)" title="Color 4: Red">C4</button>
+      <button class="color-swatch" style="--swatch:#A97800" data-color="5" onclick="setPaintColor(5)" title="Color 5: Gold">C5</button>
+      <button class="color-swatch" style="--swatch:#087383" data-color="6" onclick="setPaintColor(6)" title="Color 6: Teal">C6</button>
+      <button class="color-swatch" style="--swatch:#A63A74" data-color="7" onclick="setPaintColor(7)" title="Color 7: Magenta">C7</button>
+      <button class="color-swatch" style="--swatch:#4E6575" data-color="8" onclick="setPaintColor(8)" title="Color 8: Slate">C8</button>
+      <button class="color-swatch clear-color" data-color="none" onclick="setPaintColor(null)" title="Clear color">×</button>
+    </div>
+
     <button class="tool-btn erase-btn" id="btnErase" onclick="setMode('erase')" title="Click vertices or edges to erase (D)">
       <svg width="15" height="12" viewBox="0 0 15 12" fill="none">
         <rect x="1" y="4" width="13" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/>
@@ -216,7 +246,7 @@
       <option value="disconnected">Disconnected graph</option>
     </select>
 
-    <span style="margin-left:auto;font-size:10px;color:var(--text3);white-space:nowrap;">S · V · E · D · Esc</span>
+    <span style="margin-left:auto;font-size:10px;color:var(--text3);white-space:nowrap;">S · V · E · C · D · 1–8 · Esc</span>
   </div>
 
   <div class="status-bar s-select" id="statusBar">
@@ -340,6 +370,16 @@ const CUR_SCISSORS = `url("data:image/svg+xml;base64,${btoa(SCISSORS_SVG)}") 14 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const R     = 22;
 const HIT_R = 28;
+const GRAPH_COLORS = {
+  1: { stroke:'#2167B1', fill:'#E0EFFF' },
+  2: { stroke:'#16834F', fill:'#DFF5E9' },
+  3: { stroke:'#6F42A1', fill:'#EEE5F8' },
+  4: { stroke:'#A6192E', fill:'#FDE5E8' },
+  5: { stroke:'#A97800', fill:'#FFF3BF' },
+  6: { stroke:'#087383', fill:'#DFF8FB' },
+  7: { stroke:'#A63A74', fill:'#F9E4F0' },
+  8: { stroke:'#4E6575', fill:'#E8EDF0' }
+};
 
 // ── State ──────────────────────────────────────────────────────────────────────
 const graph = new Graph();
@@ -351,6 +391,7 @@ let hoverV  = null;
 let eraseH  = null;
 let chipDragging = false;
 let chipMoved    = false;
+let paintColor   = 1;
 
 // ── DOM refs ───────────────────────────────────────────────────────────────────
 const svg      = document.getElementById('graphSvg');
@@ -402,9 +443,20 @@ function setMode(m) {
   wrap.className = 'canvas-wrap m-' + m;
   document.getElementById('btnSelect').classList.toggle('active', m === 'select');
   document.getElementById('btnEdge').classList.toggle('active',   m === 'edge');
+  document.getElementById('btnColor').classList.toggle('active',  m === 'color');
   document.getElementById('btnErase').classList.toggle('active',  m === 'erase');
   setStatus();
   render();
+}
+
+function setPaintColor(colorId) {
+  paintColor = colorId;
+  document.querySelectorAll('.color-swatch').forEach(btn => {
+    const value = btn.dataset.color === 'none' ? null : Number(btn.dataset.color);
+    btn.classList.toggle('active', value === paintColor);
+  });
+  if (mode !== 'color') setMode('color');
+  else setStatus();
 }
 
 // ── Status ─────────────────────────────────────────────────────────────────────
@@ -436,6 +488,11 @@ function setStatus(msg, cls) {
   } else if (mode === 'place') {
     statusEl.className = 'status-bar s-place';
     statusEl.textContent = 'PLACE VERTEX — click anywhere on the canvas to place a vertex. Escape to cancel.';
+  } else if (mode === 'color') {
+    statusEl.className = 'status-bar s-edge';
+    statusEl.textContent = paintColor == null
+      ? 'COLOR — click a vertex or edge to clear its color.'
+      : `COLOR — Color ${paintColor} selected. Click vertices or edges to apply it.`;
   } else if (mode === 'erase') {
     statusEl.className = 'status-bar s-erase';
     if (eraseH?.type === 'vertex') {
@@ -472,17 +529,24 @@ function renderEdges() {
 
     const isSel   = sel?.type === 'edge' && sel.id === e.id;
     const isErase = eraseH?.type === 'edge' && eraseH.id === e.id;
+    const edgeColor = e.color ? GRAPH_COLORS[e.color] : null;
 
     const hit = mkel('line', { x1:s.x, y1:s.y, x2:t.x, y2:t.y, stroke:'transparent', 'stroke-width':20 });
     hit.addEventListener('mousedown', ev => {
       if (mode === 'select') { ev.stopPropagation(); setSel('edge', e.id); }
+      if (mode === 'color') {
+        ev.stopPropagation();
+        e.color = paintColor;
+        render();
+        setStatus(paintColor == null ? 'Edge color cleared.' : `Edge assigned Color ${paintColor}.`, 's-ok');
+      }
     });
     layerE.appendChild(hit);
 
     const line = mkel('line', {
       x1:s.x, y1:s.y, x2:t.x, y2:t.y,
-      stroke: isErase ? '#dc2626' : isSel ? '#2563eb' : '#64748b',
-      'stroke-width': isErase ? 3.5 : isSel ? 3 : 2,
+      stroke: isErase ? '#dc2626' : isSel ? '#2563eb' : edgeColor?.stroke || '#64748b',
+      'stroke-width': isErase ? 3.5 : isSel ? 3 : edgeColor ? 4 : 2,
       'stroke-linecap': 'round', 'pointer-events': 'none',
       'stroke-dasharray': isErase ? '7,4' : 'none'
     });
@@ -505,6 +569,7 @@ function renderVerts() {
     const isSrc    = eDrag?.srcId === v.id;
     const isHoverE = hoverV === v.id && mode === 'edge' && !eDrag;
     const isEraseH = eraseH?.type === 'vertex' && eraseH.id === v.id;
+    const vertexColor = v.color ? GRAPH_COLORS[v.color] : null;
 
     const g = mkel('g');
     g.setAttribute('data-vid', v.id);
@@ -520,19 +585,20 @@ function renderVerts() {
 
     const circle = mkel('circle', {
       cx: v.x, cy: v.y, r: R,
-      fill:   isEraseH ? '#fff1f2' : isSel ? '#eff6ff' : '#ffffff',
-      stroke: isEraseH ? '#dc2626' : (isSel||isSrc) ? '#2563eb' : '#334155',
+      fill:   isEraseH ? '#fff1f2' : isSel ? '#eff6ff' : vertexColor?.fill || '#ffffff',
+      stroke: isEraseH ? '#dc2626' : (isSel||isSrc) ? '#2563eb' : vertexColor?.stroke || '#334155',
       'stroke-width': isEraseH ? 2.5 : (isSel||isSrc) ? 2.5 : 2,
       filter: 'url(#vshadow)'
     });
     if (mode === 'select') circle.style.cursor = 'grab';
     if (mode === 'edge')   circle.style.cursor = 'pointer';
+    if (mode === 'color')  circle.style.cursor = 'crosshair';
 
     const lbl = mkel('text', {
       x: v.x, y: v.y, 'text-anchor':'middle', 'dominant-baseline':'central',
       'font-size': v.label.length > 2 ? 10 : 13, 'font-weight': 700,
       'font-family': "ui-monospace,'Cascadia Code','Courier New',monospace",
-      fill: isEraseH ? '#dc2626' : (isSel||isSrc) ? '#2563eb' : '#0f172a',
+      fill: isEraseH ? '#dc2626' : (isSel||isSrc) ? '#2563eb' : vertexColor?.stroke || '#0f172a',
       'pointer-events': 'none'
     });
     lbl.textContent = v.label;
@@ -682,7 +748,13 @@ svg.addEventListener('mouseleave', () => {
 
 // ── Per-vertex mousedown ───────────────────────────────────────────────────────
 function onVertexDown(ev, vid) {
-  if (mode === 'select') {
+  if (mode === 'color') {
+    const v = graph.vertices.find(v => v.id === vid);
+    if (v) v.color = paintColor;
+    render();
+    setStatus(paintColor == null ? `Vertex ${v?.label || vid} color cleared.` : `Vertex ${v?.label || vid} assigned Color ${paintColor}.`, 's-ok');
+    ev.preventDefault();
+  } else if (mode === 'select') {
     setSel('vertex', vid);
     vDrag = { id: vid };
     ev.preventDefault();
@@ -718,7 +790,9 @@ document.addEventListener('keydown', ev => {
   if (ev.key==='s'||ev.key==='S') setMode('select');
   if (ev.key==='e'||ev.key==='E') setMode('edge');
   if (ev.key==='v'||ev.key==='V') mode!=='place' ? setMode('place') : setMode('select');
+  if (ev.key==='c'||ev.key==='C') setMode('color');
   if (ev.key==='d'||ev.key==='D') setMode('erase');
+  if (/^[1-8]$/.test(ev.key)) setPaintColor(Number(ev.key));
   if ((ev.key==='Delete'||ev.key==='Backspace') && mode==='select' && sel) {
     if (sel.type==='vertex') { graph.removeVertex(sel.id); sel=null; render(); setStatus(); }
     else                     { graph.removeEdge(sel.id);   sel=null; render(); setStatus(); }
