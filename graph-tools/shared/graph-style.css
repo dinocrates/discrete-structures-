@@ -258,9 +258,9 @@ table.gt-table tr:last-child td { border-bottom: none; }
 .gt-handshake .ok   { color: var(--green); font-weight: 700; }
 .gt-handshake .fail { color: var(--red);   font-weight: 700; }
 
-/* ── Back link ── */
+/* Tool pages are embedded surfaces; suite navigation stays outside the iframe. */
 .gt-back {
-  display: inline-block;
+  display: none;
   font-size: 12px;
   color: var(--text3);
   text-decoration: none;
